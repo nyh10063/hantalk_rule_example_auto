@@ -2,8 +2,8 @@
   "schema_version": "hantalk_detector_bundle_v1",
   "source": {
     "dict_xlsx": "datasets/dict/dict.xlsx",
-    "source_sha256": "1c53ecbe07acdb2a7f6a89c8ffe5d06bc2eb74220817f51e41fedebabb03e4d1",
-    "generated_at": "2026-05-01T12:33:17.160212+00:00"
+    "source_sha256": "e754fe0a557b28ecf550ce6dbb82773da8b77f9fdcdfe1f3c7071006b8cf1d92",
+    "generated_at": "2026-05-01T12:46:58.283152+00:00"
   },
   "items_by_e_id": {
     "ce001": {
@@ -65,7 +65,7 @@
         "c3"
       ],
       "detect_ruleset_id": "rs_df003_d01",
-      "verify_ruleset_id": "rs_df003_v01",
+      "verify_ruleset_id": null,
       "gloss": "어떤 행위나 상태를 해 본 경험이 있거나 없음을 나타냄."
     },
     "df004": {
@@ -81,7 +81,7 @@
         "c2"
       ],
       "detect_ruleset_id": "rs_df004_d01",
-      "verify_ruleset_id": "rs_df004_v01",
+      "verify_ruleset_id": null,
       "gloss": "일어나지 않았으면 좋았을 어떤 일이 끝내 일어났음을 나타내며 동시에 그 일이 일어난 것에 대한 화자의 안타까움을 나타낼 때 쓴다."
     },
     "df005": {
@@ -97,7 +97,7 @@
         "c2"
       ],
       "detect_ruleset_id": "rs_df005_d01",
-      "verify_ruleset_id": "rs_df005_v01",
+      "verify_ruleset_id": null,
       "gloss": "이루기 쉽지 않은 어떤 일을 이루고자 하는 화자의 의지를 나타낼 때 쓴다."
     },
     "pt001": {
@@ -112,7 +112,7 @@
         "c1"
       ],
       "detect_ruleset_id": "rs_pt001_d01",
-      "verify_ruleset_id": "rs_pt001_v01",
+      "verify_ruleset_id": null,
       "gloss": "범위의 끝 지점이나 한계를 나타냄."
     },
     "pt002": {
@@ -127,7 +127,7 @@
         "c1"
       ],
       "detect_ruleset_id": "rs_pt002_d01",
-      "verify_ruleset_id": "rs_pt002_v01",
+      "verify_ruleset_id": null,
       "gloss": "현재의 상태나 정도에서 더해지거나 더 나아감을 나타냄."
     },
     "pt003": {
@@ -142,7 +142,7 @@
         "c1"
       ],
       "detect_ruleset_id": "rs_pt003_d01",
-      "verify_ruleset_id": "rs_pt003_v01",
+      "verify_ruleset_id": null,
       "gloss": "정상적인 정도를 지나침을 나타냄."
     }
   },
@@ -395,7 +395,7 @@
         "rule_id": "r_ce002_v03",
         "stage": "verify",
         "target": "raw_sentence",
-        "pattern": "r\"(?:는데다가|는\\s*데다가|데다가)\"",
+        "pattern": "(?:는데다가|는\\s*데다가|데다가)",
         "priority": 50,
         "hard_fail": true,
         "rule_type": "surface_regex",
@@ -459,7 +459,7 @@
         "rule_id": "r_ce003_v03",
         "stage": "verify",
         "target": "raw_sentence",
-        "pattern": "r\"(?:는데다가|는\\s*데다가|데다가)\"",
+        "pattern": "(?:는데다가|는\\s*데다가|데다가)",
         "priority": 50,
         "hard_fail": true,
         "rule_type": "surface_regex",
@@ -641,9 +641,7 @@
       "detect_ruleset_ids": [
         "rs_df003_d01"
       ],
-      "verify_ruleset_ids": [
-        "rs_df003_v01"
-      ]
+      "verify_ruleset_ids": []
     },
     "ps_go_mal": {
       "unit_id": "ps_go_mal",
@@ -658,10 +656,7 @@
         "rs_df004_d01",
         "rs_df005_d01"
       ],
-      "verify_ruleset_ids": [
-        "rs_df004_v01",
-        "rs_df005_v01"
-      ]
+      "verify_ruleset_ids": []
     },
     "ps_kkaji": {
       "unit_id": "ps_kkaji",
@@ -678,11 +673,7 @@
         "rs_pt002_d01",
         "rs_pt003_d01"
       ],
-      "verify_ruleset_ids": [
-        "rs_pt001_v01",
-        "rs_pt002_v01",
-        "rs_pt003_v01"
-      ]
+      "verify_ruleset_ids": []
     },
     "ps_neunde": {
       "unit_id": "ps_neunde",
@@ -703,14 +694,5 @@
       ]
     }
   },
-  "warnings": [
-    "detect_rules:4 pattern looks like a Python string literal for rule_id=r_ce002_v03",
-    "detect_rules:9 pattern looks like a Python string literal for rule_id=r_ce003_v03",
-    "items e_id=df004 verify_ruleset_id missing in detect_rules: rs_df004_v01",
-    "items e_id=df005 verify_ruleset_id missing in detect_rules: rs_df005_v01",
-    "items e_id=pt001 verify_ruleset_id missing in detect_rules: rs_pt001_v01",
-    "items e_id=pt002 verify_ruleset_id missing in detect_rules: rs_pt002_v01",
-    "items e_id=pt003 verify_ruleset_id missing in detect_rules: rs_pt003_v01",
-    "items e_id=df003 verify_ruleset_id missing in detect_rules: rs_df003_v01"
-  ]
+  "warnings": []
 }
