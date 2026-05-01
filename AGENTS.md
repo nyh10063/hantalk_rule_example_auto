@@ -45,6 +45,8 @@ Phase 1은 Python CLI, CSV/Excel 검수표, JSONL/CSV 로그 중심으로 작게
 - 실질적인 변경을 마친 뒤에는 반드시 `CURRENT_TASK.md`를 업데이트합니다.
 - 기존 사람이 작성한 gold, labels 파일은 명시 요청 없이 덮어쓰지 않습니다.
 - 자동 생성 파일과 사람이 확정한 파일을 파일명이나 폴더로 구분합니다.
+- 기본 작업 흐름은 `로컬 컴퓨터 작업 → GitHub main push → Colab pull`입니다.
+- Colab은 실행/검증 환경으로 사용하고, 코드와 기준 문서는 로컬 워킹 폴더에서 수정한 뒤 GitHub를 통해 Colab에 반영합니다.
 
 ## 작업 완료 시 CURRENT_TASK.md 업데이트 항목
 

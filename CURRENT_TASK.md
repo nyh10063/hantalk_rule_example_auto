@@ -179,3 +179,10 @@
 - Git에 올리지 않는 작업 데이터 폴더를 `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work`로 기록함.
 - `gold.xlsx`에서 자동 생성되는 item별 gold JSONL 폴더명을 `gold/`에서 `exported_gold/`로 바꾼 원칙을 반영함.
 - `PROJECT_SPEC.md`, `DECISIONS.md`, `CURRENT_TASK.md`, `AGENTS.md`의 관련 경로 표기를 점검 및 갱신함.
+
+## 2026-05-01 Git/Colab 운영 원칙 기록
+
+- 기본 작업 흐름을 `로컬 컴퓨터 작업 → GitHub main push → Colab pull → Colab 실행/검증`으로 기록함.
+- Colab에서는 원칙적으로 코드를 직접 수정하지 않고, 수정이 필요하면 로컬에서 고친 뒤 GitHub를 통해 반영하기로 함.
+- Phase 1에서는 브랜치를 늘리지 않고 `main` 중심으로 운영할 수 있음을 기록함.
+- `PROJECT_SPEC.md`, `DECISIONS.md`, `CURRENT_TASK.md`, `AGENTS.md`에 관련 운영 원칙을 반영함.
