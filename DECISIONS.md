@@ -146,3 +146,11 @@ Reason: 한국어 문법항목에는 df003 `ㄴ/은 적 있/없`처럼 불연속
 ### Decision: 1차 DetectorEngine의 span은 `regex_match`이며 교육적 최종 span이 아니다.
 
 Reason: 이번 1차 구현은 `dict.xlsx` 기반 runtime bundle과 최소 DetectorEngine을 붙여 gold 문장에서 후보를 빠짐없이 찾는지 검증하는 단계이다. 아직 component 기반 span 조립을 구현하지 않았으므로, candidate에는 `span_source=regex_match`, `component_span_enabled=false`를 기록한다. 예를 들어 df003의 1차 span이 `적이 있`으로 나와도 이는 최종 교육적 span인 `본 적 ... 있`이 완성되었다는 뜻이 아니다.
+
+### Decision: DetectorEngine은 명시된 active unit만 실행한다.
+
+Reason: `active_unit_ids`가 비어 있을 때 모든 runtime unit을 자동 실행하면 300개 문법항목 확장 단계에서 응답속도와 디버깅 안정성이 크게 흔들릴 수 있다. 따라서 Phase 1 DetectorEngine은 `active_unit_ids`를 필수로 요구하고, 전체 실행은 `allow_all=True`를 명시한 경우에만 허용한다. `group=c` polyset unit은 의미별 verify 정책이 아직 확정되지 않았으므로 `allow_experimental_polyset=True`가 없으면 실행하지 않는다.
+
+### Decision: bundle export validation은 조용한 오작동보다 빠른 실패를 우선한다.
+
+Reason: 300개 문법항목을 Excel로 관리하면 e_id 오타, 잘못된 ruleset 연결, header 밀림 같은 문제가 반드시 생길 수 있다. 따라서 `detect_rules.e_id`와 `rule_components.e_id`가 `items.e_id`에 없거나, detect/verify ruleset의 stage가 맞지 않거나, regex compile이 실패하면 bundle export를 중단한다. warning은 pattern literal 의심처럼 사람이 확인할 수 있지만 runtime을 즉시 깨뜨리지는 않는 경우로 제한한다.

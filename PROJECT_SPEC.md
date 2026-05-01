@@ -378,6 +378,15 @@ DetectorEngine 1차 구현 범위:
 - `stage=verify`, `target=raw_sentence` 또는 `target=char_window` hard_fail 최소 구현
 - candidate span을 `span_segments`로 출력
 
+DetectorEngine 실행 안전장치:
+
+- Phase 1에서는 `active_unit_ids`를 반드시 명시합니다.
+- 전체 runtime unit 실행은 `allow_all=True`를 명시한 경우에만 허용합니다.
+- `group=c` polyset runtime unit은 아직 실험 단계이므로 기본 실행을 막습니다.
+- polyset unit은 명시적 실험에서 `allow_experimental_polyset=True`를 넘긴 경우에만 실행합니다.
+- rule 하나에서 match가 폭주하지 않도록 `max_matches_per_rule` 제한을 둡니다. 기본값은 50입니다.
+- 제한에 걸리면 detector result summary의 `n_matches_truncated`, `truncated_rules`에 기록합니다.
+
 DetectorEngine 1차 구현의 span 정책:
 
 - `span_segments`는 detector output의 canonical span 표현입니다.
@@ -404,6 +413,17 @@ span_end
 - span은 불연속 표현을 지원해야 하므로 단일 `span_start`, `span_end` 대신 `span_segments`를 사용합니다.
 
 `char_window`의 `window_chars`는 후보 span envelope 기준 좌우 각각 N자를 뜻합니다.
+
+`export_bundle.py` validation 원칙:
+
+- regex compile 실패는 fatal error입니다.
+- 필수 sheet/column 누락, 중복 ID, 잘못된 group/stage/target도 fatal error입니다.
+- `detect_rules.e_id`와 `rule_components.e_id`는 반드시 `items.e_id`에 존재해야 합니다.
+- `items.detect_ruleset_id`는 detect rule을 1개 이상 포함해야 합니다.
+- `items.verify_ruleset_id`가 있으면 verify rule을 1개 이상 포함해야 합니다.
+- 같은 `ruleset_id` 안에 detect/verify stage가 섞이면 fatal error입니다.
+- Excel header row 중간에 빈 header가 있으면 값과 header가 어긋날 수 있으므로 fatal error입니다.
+- pattern이 `r"..."` 같은 Python literal처럼 보이는 경우, group=c인데 polyset_id가 없는 경우, verify rule인데 hard_fail=false인 경우는 warning입니다.
 
 ## 향후 detector 설계 검토 메모
 

@@ -47,6 +47,9 @@ class DetectorEngine:
         raw_text: str,
         *,
         active_unit_ids: list[str] | None = None,
+        allow_all: bool = False,
+        allow_experimental_polyset: bool = False,
+        max_matches_per_rule: int = 50,
         text_id: str | None = None,
         profile_id: str | None = None,
         window_chars: int = 20,
@@ -56,18 +59,36 @@ class DetectorEngine:
         active_unit_ids controls which runtime units are executed. In Phase 1,
         df003 item-unit detection is the supported/tested path.
         """
-        units = self._select_units(active_unit_ids)
+        units = self._select_units(
+            active_unit_ids,
+            allow_all=allow_all,
+            allow_experimental_polyset=allow_experimental_polyset,
+        )
         raw_candidates: list[dict[str, Any]] = []
         detect_match_count = 0
+        truncated_match_count = 0
+        truncated_rules: list[dict[str, Any]] = []
 
         for unit in units:
             for ruleset_id in unit.get("detect_ruleset_ids") or []:
                 for rule in self._rules_for_ruleset(ruleset_id, stage="detect"):
                     pattern = self._compiled_rules[rule["rule_id"]]
+                    rule_match_count = 0
                     for match in pattern.finditer(raw_text):
+                        if rule_match_count >= max_matches_per_rule:
+                            truncated_match_count += 1
+                            truncated_rules.append(
+                                {
+                                    "unit_id": unit["unit_id"],
+                                    "rule_id": rule["rule_id"],
+                                    "max_matches_per_rule": max_matches_per_rule,
+                                }
+                            )
+                            break
                         start, end = match.span()
                         if start == end:
                             continue
+                        rule_match_count += 1
                         detect_match_count += 1
                         span_segments = validate_span_segments(raw_text, [[start, end]])
                         raw_candidates.append(
@@ -111,17 +132,33 @@ class DetectorEngine:
                 "n_candidates_before_verify": len(merged_candidates),
                 "n_candidates_after_verify": len(kept_candidates),
                 "n_candidates_hard_failed": hard_fail_count,
+                "n_matches_truncated": truncated_match_count,
+                "truncated_rules": truncated_rules,
             },
         }
 
-    def _select_units(self, active_unit_ids: list[str] | None) -> list[dict[str, Any]]:
+    def _select_units(
+        self,
+        active_unit_ids: list[str] | None,
+        *,
+        allow_all: bool,
+        allow_experimental_polyset: bool,
+    ) -> list[dict[str, Any]]:
         if active_unit_ids is None:
-            return [self.runtime_units[unit_id] for unit_id in sorted(self.runtime_units)]
+            if not allow_all:
+                raise ValueError("active_unit_ids is required unless allow_all=True")
+            active_unit_ids = sorted(self.runtime_units)
         units: list[dict[str, Any]] = []
         for unit_id in active_unit_ids:
             if unit_id not in self.runtime_units:
                 raise ValueError(f"Unknown active_unit_id: {unit_id}")
-            units.append(self.runtime_units[unit_id])
+            unit = self.runtime_units[unit_id]
+            if unit.get("unit_type") == "polyset" and not allow_experimental_polyset:
+                raise ValueError(
+                    f"Polyset runtime unit is experimental and disabled in Phase 1: {unit_id}. "
+                    "Pass allow_experimental_polyset=True only for explicit experiments."
+                )
+            units.append(unit)
         return units
 
     def _rules_for_ruleset(self, ruleset_id: str, *, stage: str) -> list[dict[str, Any]]:

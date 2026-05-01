@@ -42,6 +42,8 @@
 - `configs/detector/detector_bundle.json` 생성 완료
 - `src/test_gold.py`에 DetectorEngine bundle 평가 경로 추가 완료
 - df003 bundle 경로의 gold 50개 기준 sentence recall과 span overlap recall이 1.0임을 확인함
+- `export_bundle.py` validation 강화 완료
+- DetectorEngine의 `active_unit_ids` 필수화, group=c polyset 기본 실행 차단, `max_matches_per_rule` 제한 추가 완료
 
 ## 이번에 테스트한 것
 
@@ -59,6 +61,8 @@
 - df003 bundle 평가(sentence): `gold_total=50`, `gold_matched=50`, `gold_recall=1.0`, `span_overlap_recall=1.0`, `span_exact_recall=0.0`, `fn_count=0`
 - df003 bundle 평가(overlap): `gold_total=50`, `gold_matched=50`, `gold_recall=1.0`, `span_overlap_recall=1.0`, `span_exact_recall=0.0`, `fn_count=0`
 - 직접 detect 확인: `"저는 제주도에 가 본 적이 있어요."`에서 1차 DetectorEngine은 `span_segments=[[12, 16]]`, `span_text="적이 있"`, `span_source="regex_match"`, `component_span_enabled=false`를 출력함
+- `active_unit_ids` 없이 DetectorEngine을 실행하면 `ValueError: active_unit_ids is required unless allow_all=True`가 발생함을 확인함
+- `ps_neunde` polyset unit을 기본 옵션으로 실행하면 `ValueError`가 발생함을 확인함
 
 ## 다음 작업
 
@@ -89,6 +93,7 @@
 - `PROJECT_SPEC.md`의 `향후 detector 설계 검토 메모`는 SSOT가 아니라 비-SSOT 검토 목록입니다. 구현 전 다시 검토해야 합니다.
 - 1차 DetectorEngine의 df003 span은 `적이 있`처럼 regex match span이며, 최종 교육적 span인 `본 적 ... 있`이 아닙니다.
 - `detector_bundle.json` 생성 시 경고 8개가 있습니다. 특히 일부 pattern literal 의심 경고와 몇몇 verify_ruleset_id 누락 경고는 다음 dict 정리 때 확인해야 합니다.
+- 현재 `detector_bundle.json`은 dict 정리 후 warnings=0으로 생성됩니다.
 
 
 ## 2026-04-30 업무 시작 점검
@@ -307,3 +312,19 @@
   - `python3 src/test_gold.py --item-id df003 --bundle configs/detector/detector_bundle.json --active-unit-id df003 --bundle-match-policy overlap --fail-on-fn`
   - `python3 src/test_gold.py --item-id df003 --regex-version v1 --fail-on-fn`
   - `python3 src/test_gold.py --item-id df003 --regex-version v2_bridge_candidate --fail-on-fn`
+
+## 2026-05-01 detector 안전장치 보강
+
+- `export_bundle.py`에서 `detect_rules.e_id`와 `rule_components.e_id`가 `items.e_id`에 없는 경우 fatal error로 처리하도록 함.
+- `items.detect_ruleset_id`가 detect rule을 1개도 포함하지 않거나, `items.verify_ruleset_id`가 verify rule을 1개도 포함하지 않으면 fatal error로 처리하도록 함.
+- 같은 `ruleset_id` 안에 detect/verify stage가 섞이면 fatal error로 처리하도록 함.
+- Excel header row 중간의 빈 header와 중복 header를 fatal error로 처리하도록 함.
+- DetectorEngine은 `active_unit_ids`가 없으면 기본적으로 실행하지 않고, `allow_all=True`일 때만 전체 runtime unit 실행을 허용하도록 함.
+- `group=c` polyset runtime unit은 Phase 1에서 기본 실행을 막고, 명시적 실험을 위해 `allow_experimental_polyset=True`를 둠.
+- `max_matches_per_rule` 기본값 50을 추가하고, match 폭주가 있으면 summary에 `n_matches_truncated`, `truncated_rules`를 남기도록 함.
+- 검증:
+  - `python3 -m py_compile src/detector/export_bundle.py src/detector/engine.py src/detector/span_utils.py src/test_gold.py`
+  - `python3 -m src.detector.export_bundle --dict datasets/dict/dict.xlsx --out configs/detector/detector_bundle.json` → `warnings=0`
+  - df003 bundle sentence/overlap 평가 모두 `gold_recall=1.0`, `fn_count=0`
+  - 기존 regex v1/v2 평가 모두 `gold_recall=1.0`, `fn_count=0`
+  - `active_unit_ids` 누락 실행과 `ps_neunde` 기본 실행이 의도대로 `ValueError`를 발생시키는지 확인함.

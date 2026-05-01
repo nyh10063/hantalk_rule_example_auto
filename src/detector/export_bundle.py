@@ -132,7 +132,24 @@ def _split_ids(value: Any) -> list[str]:
 def _read_sheet(workbook: Any, sheet_name: str) -> tuple[list[str], list[tuple[int, dict[str, Any]]]]:
     worksheet = workbook[sheet_name]
     header_row = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True))
-    headers = [str(cell).strip() for cell in header_row if cell is not None and str(cell).strip()]
+    last_non_blank_idx = -1
+    for idx, cell in enumerate(header_row):
+        if not _is_blank(cell):
+            last_non_blank_idx = idx
+    if last_non_blank_idx < 0:
+        raise BundleExportError(f"{sheet_name} has no header row")
+
+    headers: list[str] = []
+    seen_headers: set[str] = set()
+    for idx, cell in enumerate(header_row[: last_non_blank_idx + 1]):
+        if _is_blank(cell):
+            raise BundleExportError(f"{sheet_name} has blank header in the middle at column {idx + 1}")
+        header = str(cell).strip()
+        if header in seen_headers:
+            raise BundleExportError(f"{sheet_name} has duplicated header: {header}")
+        seen_headers.add(header)
+        headers.append(header)
+
     records: list[tuple[int, dict[str, Any]]] = []
     for row_no, values in enumerate(worksheet.iter_rows(min_row=2, values_only=True), start=2):
         if not values or all(_is_blank(value) for value in values):
@@ -206,6 +223,8 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
     components_by_e_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row_no, row in component_rows:
         e_id = _required_text(row, "e_id", sheet="rule_components", row_no=row_no)
+        if e_id not in items_by_e_id:
+            raise BundleExportError(f"rule_components:{row_no} e_id not found in items: {e_id}")
         component = {
             "e_id": e_id,
             "comp_surf": _required_text(row, "comp_surf", sheet="rule_components", row_no=row_no),
@@ -226,6 +245,8 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
     seen_rule_ids: set[str] = set()
     for row_no, row in rule_rows:
         e_id = _required_text(row, "e_id", sheet="detect_rules", row_no=row_no)
+        if e_id not in items_by_e_id:
+            raise BundleExportError(f"detect_rules:{row_no} e_id not found in items: {e_id}")
         ruleset_id = _required_text(row, "ruleset_id", sheet="detect_rules", row_no=row_no)
         rule_id = _required_text(row, "rule_id", sheet="detect_rules", row_no=row_no)
         if rule_id in seen_rule_ids:
@@ -272,10 +293,19 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
     for e_id, item in items_by_e_id.items():
         detect_ruleset_id = item.get("detect_ruleset_id")
         verify_ruleset_id = item.get("verify_ruleset_id")
-        if detect_ruleset_id and detect_ruleset_id not in all_ruleset_ids:
-            warnings.append(f"items e_id={e_id} detect_ruleset_id missing in detect_rules: {detect_ruleset_id}")
-        if verify_ruleset_id and verify_ruleset_id not in all_ruleset_ids:
-            warnings.append(f"items e_id={e_id} verify_ruleset_id missing in detect_rules: {verify_ruleset_id}")
+        if detect_ruleset_id:
+            detect_rules = [rule for rule in rules_by_ruleset_id.get(detect_ruleset_id, []) if rule.get("stage") == "detect"]
+            if not detect_rules:
+                raise BundleExportError(f"items e_id={e_id} detect_ruleset_id has no detect rules: {detect_ruleset_id}")
+        if verify_ruleset_id:
+            verify_rules = [rule for rule in rules_by_ruleset_id.get(verify_ruleset_id, []) if rule.get("stage") == "verify"]
+            if not verify_rules:
+                raise BundleExportError(f"items e_id={e_id} verify_ruleset_id has no verify rules: {verify_ruleset_id}")
+
+    for ruleset_id, rules in rules_by_ruleset_id.items():
+        stages = {rule["stage"] for rule in rules}
+        if len(stages) > 1:
+            raise BundleExportError(f"ruleset_id contains mixed stages: {ruleset_id} -> {sorted(stages)}")
 
     referenced_rulesets = {item.get("detect_ruleset_id") for item in items_by_e_id.values()} | {
         item.get("verify_ruleset_id") for item in items_by_e_id.values()
