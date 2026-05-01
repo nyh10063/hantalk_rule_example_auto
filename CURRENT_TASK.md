@@ -3,9 +3,9 @@
 ## 현재 상태
 
 - Current phase: Phase 1 pilot
-- Current item: df003 `-(으)ㄴ 적이 있/없다`
+- Current item: df003 `ㄴ/은 적 있/없`
 - Current project goal: 300개 문법항목의 검색용 정규식 및 오탐 필터링 인코더용 positive/negative 예문 구축 자동화
-- Current immediate goal: df003 v1 정규식을 일반 말뭉치에 적용해 corpus hit 후보를 수집하고, TP/FP 검수표까지 생성하는 최소 Python CLI pipeline 준비
+- Current immediate goal: df003 v1 정규식을 뉴스/일상 대화 말뭉치 각 5,000행 batch에 적용해 hit 후보를 수집하고, TP/FP 검수표까지 생성하는 최소 Python CLI pipeline 준비
 
 ## 현재까지 완료
 
@@ -31,8 +31,11 @@
 - 정규식 gold의 장기 원본은 `datasets/gold/gold.xlsx`로 관리하고, item별 JSONL은 자동 생성 산출물로 두기로 문서화함
 - `PROJECT_SPEC.md`의 df003 gold schema를 실제 JSONL 형식에 맞게 업데이트함
 - `regex/df003_versions.jsonl`에 df003 v1 정규식을 추가함
+- `regex/df003_versions.jsonl`에 df003 v2 bridge candidate 정규식을 추가함
+- df003 문법항목 명칭을 필수 구성성분 중심인 `ㄴ/은 적 있/없`으로 정리함
 - `src/test_gold.py` 구현 완료
 - df003 v1 정규식의 gold 50개 기준 recall이 1.0임을 확인함
+- df003 v2 bridge candidate 정규식의 gold 50개 기준 recall이 1.0임을 확인함
 
 ## 이번에 테스트한 것
 
@@ -41,10 +44,13 @@
 - `df003_gold_50.jsonl`이 JSONL 50줄로 생성되도록 검증함
 - `python3 -m py_compile src/test_gold.py`로 문법 검사를 수행함
 - `python3 src/test_gold.py --item-id df003 --regex-version v1` 실행 결과 `gold_total=50`, `gold_matched=50`, `gold_recall=1.0`, `fn_count=0`을 확인함
+- `python3 src/test_gold.py --item-id df003 --regex-version v2_bridge_candidate --fail-on-fn` 실행 결과 `gold_total=50`, `gold_matched=50`, `gold_recall=1.0`, `fn_count=0`을 확인함
+- `rg`로 긴 활용형 중심의 df003 명명 표현이 남아 있지 않음을 확인함
+- `regex/df003_versions.jsonl` JSONL 파싱이 정상임을 확인함
 
 ## 다음 작업
 
-1. df003 v1 정규식을 일반 말뭉치에 적용하는 corpus search CLI 구현
+1. df003 v1 정규식을 뉴스/일상 대화 말뭉치 각 5,000행 batch에 적용하는 corpus search CLI 구현
 2. `hits/df003_corpus_hits.csv` 생성
 3. TP/FP/span 사람 검수용 `labels/df003_human_review.csv` 형식 확정
 4. `gold.xlsx`에서 `exported_gold/{item_id}_gold_50.jsonl`을 생성하는 export 흐름 설계
@@ -56,18 +62,25 @@
 - LLM이 만든 TP/FP 판단은 임시 참고용이며 gold label이 아닙니다.
 - 사람이 만든 gold와 human review 파일은 명시 요청 없이 덮어쓰지 않습니다.
 - 정규식 recall=1은 사람이 만든 gold 50개 기준입니다.
+- 말뭉치 FP를 줄이기 위해 정규식을 수정하더라도 gold recall=1이 깨지면 검색용 정규식으로 확정하지 않습니다.
+- 브릿지는 무조건 채택하지 않고, 넓은 정규식으로 gold recall=1을 확보한 뒤 후보 버전을 만들어 비교합니다.
+- 브릿지 후보는 gold recall=1 유지와 5,000행 말뭉치 FP 감소량을 확인한 뒤, FP 감소 효과가 있거나 span 경계가 좋아질 때만 채택합니다.
+- 뉴스/일상 대화 말뭉치는 우선 각각 5,000행 단위 batch로 검색합니다.
 
 ## 미해결 문제
 
 - 사용할 일반 말뭉치 위치와 형식이 아직 확정되지 않았습니다.
 - df003 span 기준은 기존 df003 gold span을 변환해 사용했지만, 최종 교육적 span 정책은 사람이 확인해야 합니다.
+- 뉴스 말뭉치와 일상 대화 말뭉치의 실제 파일 경로, 행 단위 형식, batch offset 관리 방식이 아직 확정되지 않았습니다.
+- 브릿지에 사용할 형태소 분석기 선택, Kiwi 상업 라이선스/속도/정확도, 다른 형태소 분석기 후보 비교가 아직 필요합니다.
+- 문장 단위 형태소 분석 cache를 전체 300개 규칙에 공유할지, 난이도/목표 항목에 따라 필요한 규칙에만 공유할지는 HanTalk 본 시스템 설계 단계에서 다시 결정해야 합니다.
 
 
 ## 2026-04-30 업무 시작 점검
 
 - 읽은 기준 문서: `AGENTS.md` → `PROJECT_SPEC.md` → `DECISIONS.md` → `CURRENT_TASK.md`
 - 기준 문서상 현재 Phase: Phase 1 pilot
-- 기준 문서상 현재 항목: df003 `-(으)ㄴ 적이 있/없다`
+- 기준 문서상 현재 항목: df003 `ㄴ/은 적 있/없`
 - 기준 문서상 현재 목표: df003 gold 50개 기준 recall=1 검색용 정규식과 최소 Python CLI pipeline 준비
 - 현재 허용되는 다음 작업: df003 정규식 v1 초안, `src/test_gold.py`, FN report, `regex/df003_versions.jsonl` 구조 구현
 - 현재 금지/보류: Label Studio, Prefect, DVC, MLflow, LangGraph, 인코더 fine-tuning
@@ -199,3 +212,53 @@
 - 테스트 결과: `gold_total=50`, `gold_matched=50`, `gold_recall=1.000000`, `fn_count=0`
 - 생성된 보고서: `logs/df003_gold_eval_v1.json`, `logs/df003_fn_report_v1.jsonl`
 - 다음 작업은 v1 정규식을 일반 말뭉치에 적용해 hit 후보를 수집하고, TP/FP 검수표 구조를 만드는 것임.
+
+## 2026-05-01 말뭉치 FP 기반 정규식 개선 루프 기록
+
+- `PROJECT_SPEC.md`에 검색용 정규식 및 예문 구축 루프를 추가함.
+- 1단계는 정규식 gold 50개 기준 recall=1 검색용 정규식을 만드는 과정으로 정리함.
+- 2단계는 뉴스/일상 대화 말뭉치를 각각 5,000행 단위 batch로 검색하고, 사람이 검수한 FP 유형을 바탕으로 gold recall=1을 유지하며 정규식을 좁히는 과정으로 정리함.
+- TP/FP 최종 라벨과 span은 사람이 확정하고, LLM 판단은 임시 참고용으로만 사용한다는 원칙을 재확인함.
+- positive/negative 예문은 각각 100개가 모일 때까지 batch 검색과 사람 검수를 반복하기로 함.
+
+## 2026-05-01 브릿지 및 형태소 분석 cache 원칙 기록
+
+- 브릿지는 무조건 채택하지 않고 비교 실험 후 채택하기로 기록함.
+- 먼저 넓은 정규식으로 gold recall=1을 확보하기로 함.
+- 브릿지 후보를 붙인 버전을 별도로 만들고, gold recall=1 유지 여부를 확인하기로 함.
+- gold recall=1을 유지한 브릿지 후보는 5,000행 말뭉치에서 FP 감소량을 확인하기로 함.
+- FP 감소 효과가 있거나 span 경계가 좋아지면 채택하고, 효과가 작고 복잡도만 늘면 보류하기로 함.
+- `AGENTS.md`, `PROJECT_SPEC.md`, `DECISIONS.md`, `CURRENT_TASK.md`에서 이전 브릿지 채택 표현을 비교 후 채택 원칙으로 수정함.
+- `rg`로 관련 문구를 확인함. 코드 변경은 없으므로 별도 실행 테스트는 하지 않음.
+- 형태소 분석은 장기적으로 문장 단위 1회 분석 후 token/span/cache를 만들고 필요한 규칙들이 공유하는 구조를 검토하기로 함.
+- 모든 300개 규칙이 항상 공유하는 것이 아니라, 난이도 단계나 목표 문법항목 범위에 따라 필요한 규칙만 공유할 수 있다는 단서를 기록함.
+- Kiwi는 후보 중 하나로 두고, 상업 라이선스, 속도, 정확도, 배포 조건 및 다른 형태소 분석기 가능성을 나중에 반드시 비교하기로 함.
+
+## 2026-05-01 df003 bridge candidate 추가
+
+- 이전 프로젝트의 `build_silver.py`/`infer_step1.py`를 확인해 관형형 브릿지의 핵심이 `ㄴ/은` 구성요소를 명시적 `은/ㄴ/ᆫ` 또는 앞 음절 종성 `ㄴ`으로 복구하는 방식임을 확인함.
+- 그 원리를 순수 Python `re`에서 쓸 수 있도록 종성 `ㄴ` 음절 class를 사용한 `v2_bridge_candidate` 정규식으로 정리함.
+- `regex/df003_versions.jsonl`에 `v2_bridge_candidate`를 추가함.
+- 실행 명령: `python3 src/test_gold.py --item-id df003 --regex-version v2_bridge_candidate --fail-on-fn`
+- 테스트 결과: `gold_total=50`, `gold_matched=50`, `gold_recall=1.000000`, `fn_count=0`
+- 생성된 보고서: `logs/df003_gold_eval_v2_bridge_candidate.json`, `logs/df003_fn_report_v2_bridge_candidate.jsonl`
+- 다음 단계는 v1과 v2 bridge candidate를 같은 5,000행 말뭉치 batch에 적용해 FP 감소량과 span 경계 개선 여부를 비교하는 것임.
+
+## 2026-05-01 df003 명칭 정리
+
+- 문법항목 명명은 필수 구성성분만 포함하는 방향으로 정리함.
+- 긴 활용형 중심으로 남아 있던 df003 항목명을 `ㄴ/은 적 있/없`으로 변경함.
+- 수정 파일: `AGENTS.md`, `PROJECT_SPEC.md`, `DECISIONS.md`, `CURRENT_TASK.md`, `configs/grammar_items.yaml`, `regex/df003_versions.jsonl`.
+- `dict.xlsx`의 `items.canonical_form`은 이미 `ㄴ/은 적 있/없`이므로 수정하지 않음.
+- `gold.xlsx`와 `exported_gold/df003_gold_50.jsonl`의 실제 예문 문장은 명칭이 아니라 원문 자료이므로 수정하지 않음.
+- 검증: `python3 src/test_gold.py --item-id df003 --regex-version v1 --fail-on-fn`, `python3 src/test_gold.py --item-id df003 --regex-version v2_bridge_candidate --fail-on-fn`.
+
+## 2026-05-01 df003 필수 구성성분 명명 재점검
+
+- 기준 문서 순서(`AGENTS.md` → `PROJECT_SPEC.md` → `DECISIONS.md` → `CURRENT_TASK.md`)를 다시 읽고 현재 Phase 1 범위에 맞는 작업인지 확인함.
+- `plan_by_user.md`에서 pilot 항목명과 예시 config의 `name`을 `ㄴ/은 적 있/없`으로 정리함.
+- `configs/grammar_items.yaml`, `PROJECT_SPEC.md`, `plan_by_user.md`의 alias도 활용형 중심 표현 대신 `ㄴ 적 있`, `은 적 있`, `본 적 있`처럼 필수 구성성분 중심으로 다듬음.
+- 실제 gold 예문과 포함/제외 예시는 원문 데이터 또는 표면 예시이므로 수정하지 않음.
+- 이전 프로젝트의 규칙 detect 방식은 그대로 복제하지 않고, 응답속도를 줄이는 조건 아래에서 필요한 detect/span/bridge/cache 아이디어만 참고하기로 재확인함.
+- 검증: 기준 문서/config/regex/plan 파일에서 긴 활용형 중심의 df003 항목명과 alias가 남아 있지 않음을 `rg`로 확인함. 남은 `가 본 적이 있다` 표현은 항목명이 아니라 포함 예시 문장임.
+- 검증: `python3 -m py_compile src/test_gold.py`, `python3 src/test_gold.py --item-id df003 --regex-version v1 --fail-on-fn`, `python3 src/test_gold.py --item-id df003 --regex-version v2_bridge_candidate --fail-on-fn`.
