@@ -1,0 +1,40 @@
+# HanTalk grammar item configuration
+# Phase 1 pilot item. Keep this file small until the df003 pipeline is stable.
+
+df003:
+  source_e_id: "df003"
+  name: "-(으)ㄴ 적이 있/없다"
+  display_name: "ㄴ/은 적 있/없(경험 유무 서술)"
+  meaning: "경험 유무 서술"
+  aliases:
+    - "ㄴ 적 있다"
+    - "은 적 있다"
+    - "ㄴ 적 없다"
+    - "은 적 없다"
+    - "본 적 있다"
+    - "본 적 없다"
+    - "적이 있다"
+    - "적이 없다"
+    - "적 있었다"
+    - "적 없었다"
+  include_criteria:
+    - "과거 경험의 존재 또는 부재를 나타내는 구성"
+    - "있다, 없다, 있었다, 없었다, 있는, 없는, 있나요, 없나요 등 활용형 포함"
+    - "적과 있/없 사이에 은, 는, 도, 만 등 보조사가 삽입된 경우 포함"
+    - "본적 있다처럼 띄어쓰기가 붙은 경우도 검색 대상에 포함"
+  exclude_criteria:
+    - "'적'이 enemy 의미인 경우"
+    - "'적다' 계열"
+    - "'적어도' 부사"
+    - "'옛적'처럼 어휘 내부에 포함된 경우"
+    - "경험 표현이 아니라 단순 명사 '적'만 나타나는 경우"
+  target_span_policy: "경험 표현의 핵심 형태 span을 기록한다. 불연속 표현은 target_spans에 여러 구간으로 보존한다."
+  gold_file: "gold/df003_gold_50.jsonl"
+  source_gold_file: "정규식 골드/정규식 골드_df003.xlsx"
+  gold_count: 50
+  status:
+    gold: ready
+    regex: pending
+    corpus_hits: pending
+    human_review: pending
+    dataset: pending
