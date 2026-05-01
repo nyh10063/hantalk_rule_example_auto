@@ -5,7 +5,7 @@
 - Current phase: Phase 1 pilot
 - Current item: df003 `-(으)ㄴ 적이 있/없다`
 - Current project goal: 300개 문법항목의 검색용 정규식 및 오탐 필터링 인코더용 positive/negative 예문 구축 자동화
-- Current immediate goal: `datasets/gold/gold.xlsx` 원본 형식을 확정한 뒤, df003에 대해 정규식 골드 50개 기준 recall=1 검색용 정규식을 만들고, corpus hit 검수표까지 생성하는 최소 Python CLI pipeline 준비
+- Current immediate goal: df003 v1 정규식을 일반 말뭉치에 적용해 corpus hit 후보를 수집하고, TP/FP 검수표까지 생성하는 최소 Python CLI pipeline 준비
 
 ## 현재까지 완료
 
@@ -30,21 +30,24 @@
 - `exported_gold/df003_gold_50.jsonl` 형식 확정 및 50개 positive gold 변환 완료
 - 정규식 gold의 장기 원본은 `datasets/gold/gold.xlsx`로 관리하고, item별 JSONL은 자동 생성 산출물로 두기로 문서화함
 - `PROJECT_SPEC.md`의 df003 gold schema를 실제 JSONL 형식에 맞게 업데이트함
+- `regex/df003_versions.jsonl`에 df003 v1 정규식을 추가함
+- `src/test_gold.py` 구현 완료
+- df003 v1 정규식의 gold 50개 기준 recall이 1.0임을 확인함
 
 ## 이번에 테스트한 것
 
 - 기존 `정규식 골드/정규식 골드_df003.xlsx`에서 positive gold가 50개인지 확인함
 - 각 gold record의 `target_spans`가 sentence의 문자 구간에서 `target_text`로 추출되는지 확인함
 - `df003_gold_50.jsonl`이 JSONL 50줄로 생성되도록 검증함
+- `python3 -m py_compile src/test_gold.py`로 문법 검사를 수행함
+- `python3 src/test_gold.py --item-id df003 --regex-version v1` 실행 결과 `gold_total=50`, `gold_matched=50`, `gold_recall=1.0`, `fn_count=0`을 확인함
 
 ## 다음 작업
 
-1. `datasets/gold/gold.xlsx` 템플릿과 sheet schema 확정
-2. `gold.xlsx`에서 `exported_gold/{item_id}_gold_50.jsonl`을 생성하는 export 흐름 설계
-3. df003 정규식 v1 초안 작성
-4. `src/test_gold.py` 구현
-5. gold 50개 기준 recall, FN report 출력 형식 구현
-6. `regex/df003_versions.jsonl`에 정규식 버전 기록 구조 구현
+1. df003 v1 정규식을 일반 말뭉치에 적용하는 corpus search CLI 구현
+2. `hits/df003_corpus_hits.csv` 생성
+3. TP/FP/span 사람 검수용 `labels/df003_human_review.csv` 형식 확정
+4. `gold.xlsx`에서 `exported_gold/{item_id}_gold_50.jsonl`을 생성하는 export 흐름 설계
 
 ## 주의사항
 
@@ -186,3 +189,13 @@
 - Colab에서는 원칙적으로 코드를 직접 수정하지 않고, 수정이 필요하면 로컬에서 고친 뒤 GitHub를 통해 반영하기로 함.
 - Phase 1에서는 브랜치를 늘리지 않고 `main` 중심으로 운영할 수 있음을 기록함.
 - `PROJECT_SPEC.md`, `DECISIONS.md`, `CURRENT_TASK.md`, `AGENTS.md`에 관련 운영 원칙을 반영함.
+
+## 2026-05-01 df003 gold recall test CLI 구현
+
+- `regex/df003_versions.jsonl`에 df003 v1 정규식을 추가함.
+- `src/test_gold.py`를 추가하여 정규식 버전 JSONL과 `exported_gold/df003_gold_50.jsonl`을 읽고 gold recall과 FN report를 출력하도록 함.
+- `configs/grammar_items.yaml`의 `gold_file` 경로를 `exported_gold/df003_gold_50.jsonl`로 수정함.
+- 실행 명령: `python3 src/test_gold.py --item-id df003 --regex-version v1`
+- 테스트 결과: `gold_total=50`, `gold_matched=50`, `gold_recall=1.000000`, `fn_count=0`
+- 생성된 보고서: `logs/df003_gold_eval_v1.json`, `logs/df003_fn_report_v1.jsonl`
+- 다음 작업은 v1 정규식을 일반 말뭉치에 적용해 hit 후보를 수집하고, TP/FP 검수표 구조를 만드는 것임.

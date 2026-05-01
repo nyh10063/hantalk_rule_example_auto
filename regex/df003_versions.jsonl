@@ -1,0 +1,1 @@
+{"item_id":"df003","regex_version":"v1","pattern":"[가-힣]+\\s*적\\s*(?:은|는|이|도|만)?\\s*.{0,20}?(?:있|없)","gold_total":50,"gold_matched":50,"gold_recall":1.0,"created_by":"codex","status":"gold_recall_passed","note":"Initial broad recall-first draft for -(으)ㄴ 적이 있/없다. Evaluated by src/test_gold.py with match_policy=overlap; fn_count=0."}

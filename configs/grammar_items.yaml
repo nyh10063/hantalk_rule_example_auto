@@ -29,7 +29,7 @@ df003:
     - "'옛적'처럼 어휘 내부에 포함된 경우"
     - "경험 표현이 아니라 단순 명사 '적'만 나타나는 경우"
   target_span_policy: "경험 표현의 핵심 형태 span을 기록한다. 불연속 표현은 target_spans에 여러 구간으로 보존한다."
-  gold_file: "gold/df003_gold_50.jsonl"
+  gold_file: "exported_gold/df003_gold_50.jsonl"
   source_gold_file: "정규식 골드/정규식 골드_df003.xlsx"
   gold_count: 50
   status:
