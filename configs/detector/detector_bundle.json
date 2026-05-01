@@ -1,0 +1,716 @@
+{
+  "schema_version": "hantalk_detector_bundle_v1",
+  "source": {
+    "dict_xlsx": "datasets/dict/dict.xlsx",
+    "source_sha256": "1c53ecbe07acdb2a7f6a89c8ffe5d06bc2eb74220817f51e41fedebabb03e4d1",
+    "generated_at": "2026-05-01T12:33:17.160212+00:00"
+  },
+  "items_by_e_id": {
+    "ce001": {
+      "e_id": "ce001",
+      "canonical_form": "다면",
+      "group": "b",
+      "polyset_id": null,
+      "level": null,
+      "topic": null,
+      "disconti_allowed": false,
+      "e_comp_ids": [
+        "c1"
+      ],
+      "detect_ruleset_id": "rs_ce001_d01",
+      "verify_ruleset_id": "rs_ce001_v01",
+      "gloss": "어떤 사실이나 상황을 가정하여 조건으로 삼는 것을 나타냄."
+    },
+    "ce002": {
+      "e_id": "ce002",
+      "canonical_form": "ㄴ/은/는데1",
+      "group": "c",
+      "polyset_id": "ps_neunde",
+      "level": null,
+      "topic": null,
+      "disconti_allowed": false,
+      "e_comp_ids": [
+        "c1"
+      ],
+      "detect_ruleset_id": "rs_ce002_d01",
+      "verify_ruleset_id": "rs_ce002_v01",
+      "gloss": "앞절의 상황·배경을 제시하고 뒤절로 이어지게 하는 연결어미."
+    },
+    "ce003": {
+      "e_id": "ce003",
+      "canonical_form": "ㄴ/은/는데2",
+      "group": "c",
+      "polyset_id": "ps_neunde",
+      "level": null,
+      "topic": null,
+      "disconti_allowed": false,
+      "e_comp_ids": [
+        "c1"
+      ],
+      "detect_ruleset_id": "rs_ce003_d01",
+      "verify_ruleset_id": "rs_ce003_v01",
+      "gloss": "앞절과 뒤절이 대조·대립 혹은 양보적 전환, 반전되는 관계로 이어질 때 쓰는 연결어미."
+    },
+    "df003": {
+      "e_id": "df003",
+      "canonical_form": "ㄴ/은 적 있/없",
+      "group": "b",
+      "polyset_id": null,
+      "level": null,
+      "topic": null,
+      "disconti_allowed": true,
+      "e_comp_ids": [
+        "c1",
+        "c2",
+        "c3"
+      ],
+      "detect_ruleset_id": "rs_df003_d01",
+      "verify_ruleset_id": "rs_df003_v01",
+      "gloss": "어떤 행위나 상태를 해 본 경험이 있거나 없음을 나타냄."
+    },
+    "df004": {
+      "e_id": "df004",
+      "canonical_form": "고 말1",
+      "group": "c",
+      "polyset_id": "ps_go_mal",
+      "level": null,
+      "topic": null,
+      "disconti_allowed": true,
+      "e_comp_ids": [
+        "c1",
+        "c2"
+      ],
+      "detect_ruleset_id": "rs_df004_d01",
+      "verify_ruleset_id": "rs_df004_v01",
+      "gloss": "일어나지 않았으면 좋았을 어떤 일이 끝내 일어났음을 나타내며 동시에 그 일이 일어난 것에 대한 화자의 안타까움을 나타낼 때 쓴다."
+    },
+    "df005": {
+      "e_id": "df005",
+      "canonical_form": "고 말2",
+      "group": "c",
+      "polyset_id": "ps_go_mal",
+      "level": null,
+      "topic": null,
+      "disconti_allowed": true,
+      "e_comp_ids": [
+        "c1",
+        "c2"
+      ],
+      "detect_ruleset_id": "rs_df005_d01",
+      "verify_ruleset_id": "rs_df005_v01",
+      "gloss": "이루기 쉽지 않은 어떤 일을 이루고자 하는 화자의 의지를 나타낼 때 쓴다."
+    },
+    "pt001": {
+      "e_id": "pt001",
+      "canonical_form": "까지1",
+      "group": "c",
+      "polyset_id": "ps_kkaji",
+      "level": null,
+      "topic": null,
+      "disconti_allowed": false,
+      "e_comp_ids": [
+        "c1"
+      ],
+      "detect_ruleset_id": "rs_pt001_d01",
+      "verify_ruleset_id": "rs_pt001_v01",
+      "gloss": "범위의 끝 지점이나 한계를 나타냄."
+    },
+    "pt002": {
+      "e_id": "pt002",
+      "canonical_form": "까지2",
+      "group": "c",
+      "polyset_id": "ps_kkaji",
+      "level": null,
+      "topic": null,
+      "disconti_allowed": false,
+      "e_comp_ids": [
+        "c1"
+      ],
+      "detect_ruleset_id": "rs_pt002_d01",
+      "verify_ruleset_id": "rs_pt002_v01",
+      "gloss": "현재의 상태나 정도에서 더해지거나 더 나아감을 나타냄."
+    },
+    "pt003": {
+      "e_id": "pt003",
+      "canonical_form": "까지3",
+      "group": "c",
+      "polyset_id": "ps_kkaji",
+      "level": null,
+      "topic": null,
+      "disconti_allowed": false,
+      "e_comp_ids": [
+        "c1"
+      ],
+      "detect_ruleset_id": "rs_pt003_d01",
+      "verify_ruleset_id": "rs_pt003_v01",
+      "gloss": "정상적인 정도를 지나침을 나타냄."
+    }
+  },
+  "components_by_e_id": {
+    "ce001": [
+      {
+        "e_id": "ce001",
+        "comp_surf": "다면",
+        "comp_id": "c1",
+        "is_required": true,
+        "anchor_rank": 1,
+        "comp_order": 1,
+        "order_policy": "fx",
+        "min_gap_to_next": null,
+        "max_gap_to_next": null
+      }
+    ],
+    "ce002": [
+      {
+        "e_id": "ce002",
+        "comp_surf": "ㄴ/은/는데",
+        "comp_id": "c1",
+        "is_required": true,
+        "anchor_rank": 1,
+        "comp_order": 1,
+        "order_policy": "fx",
+        "min_gap_to_next": null,
+        "max_gap_to_next": null
+      }
+    ],
+    "ce003": [
+      {
+        "e_id": "ce003",
+        "comp_surf": "ㄴ/은/는데",
+        "comp_id": "c1",
+        "is_required": true,
+        "anchor_rank": 1,
+        "comp_order": 1,
+        "order_policy": "fx",
+        "min_gap_to_next": null,
+        "max_gap_to_next": null
+      }
+    ],
+    "df003": [
+      {
+        "e_id": "df003",
+        "comp_surf": "ㄴ/은",
+        "comp_id": "c1",
+        "is_required": true,
+        "anchor_rank": 0,
+        "comp_order": 1,
+        "order_policy": "fx",
+        "min_gap_to_next": 0,
+        "max_gap_to_next": 6
+      },
+      {
+        "e_id": "df003",
+        "comp_surf": "적",
+        "comp_id": "c2",
+        "is_required": true,
+        "anchor_rank": 2,
+        "comp_order": 2,
+        "order_policy": "fx",
+        "min_gap_to_next": 0,
+        "max_gap_to_next": 13
+      },
+      {
+        "e_id": "df003",
+        "comp_surf": "있/없",
+        "comp_id": "c3",
+        "is_required": true,
+        "anchor_rank": 1,
+        "comp_order": 3,
+        "order_policy": "fx",
+        "min_gap_to_next": null,
+        "max_gap_to_next": null
+      }
+    ],
+    "df004": [
+      {
+        "e_id": "df004",
+        "comp_surf": "고",
+        "comp_id": "c1",
+        "is_required": true,
+        "anchor_rank": 2,
+        "comp_order": 1,
+        "order_policy": "fx",
+        "min_gap_to_next": 0,
+        "max_gap_to_next": 3
+      },
+      {
+        "e_id": "df004",
+        "comp_surf": "말",
+        "comp_id": "c2",
+        "is_required": true,
+        "anchor_rank": 1,
+        "comp_order": 2,
+        "order_policy": "fx",
+        "min_gap_to_next": null,
+        "max_gap_to_next": null
+      }
+    ],
+    "df005": [
+      {
+        "e_id": "df005",
+        "comp_surf": "고",
+        "comp_id": "c1",
+        "is_required": true,
+        "anchor_rank": 2,
+        "comp_order": 1,
+        "order_policy": "fx",
+        "min_gap_to_next": 0,
+        "max_gap_to_next": 3
+      },
+      {
+        "e_id": "df005",
+        "comp_surf": "말",
+        "comp_id": "c2",
+        "is_required": true,
+        "anchor_rank": 1,
+        "comp_order": 2,
+        "order_policy": "fx",
+        "min_gap_to_next": null,
+        "max_gap_to_next": null
+      }
+    ],
+    "pt001": [
+      {
+        "e_id": "pt001",
+        "comp_surf": "까지",
+        "comp_id": "c1",
+        "is_required": true,
+        "anchor_rank": 1,
+        "comp_order": 1,
+        "order_policy": "fx",
+        "min_gap_to_next": null,
+        "max_gap_to_next": null
+      }
+    ],
+    "pt002": [
+      {
+        "e_id": "pt002",
+        "comp_surf": "까지",
+        "comp_id": "c1",
+        "is_required": true,
+        "anchor_rank": 1,
+        "comp_order": 1,
+        "order_policy": "fx",
+        "min_gap_to_next": null,
+        "max_gap_to_next": null
+      }
+    ],
+    "pt003": [
+      {
+        "e_id": "pt003",
+        "comp_surf": "까지",
+        "comp_id": "c1",
+        "is_required": true,
+        "anchor_rank": 1,
+        "comp_order": 1,
+        "order_policy": "fx",
+        "min_gap_to_next": null,
+        "max_gap_to_next": null
+      }
+    ]
+  },
+  "rules_by_ruleset_id": {
+    "rs_ce001_d01": [
+      {
+        "e_id": "ce001",
+        "ruleset_id": "rs_ce001_d01",
+        "rule_id": "r_ce001_d01",
+        "stage": "detect",
+        "target": "raw_sentence",
+        "pattern": "(?:는다면|ㄴ다면|다면)",
+        "priority": 10,
+        "hard_fail": false,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      }
+    ],
+    "rs_ce001_v01": [
+      {
+        "e_id": "ce001",
+        "ruleset_id": "rs_ce001_v01",
+        "rule_id": "r_ce001_v01",
+        "stage": "verify",
+        "target": "char_window",
+        "pattern": "(?:다면서|다\\s*면서)",
+        "priority": 5,
+        "hard_fail": true,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      }
+    ],
+    "rs_ce002_d01": [
+      {
+        "e_id": "ce002",
+        "ruleset_id": "rs_ce002_d01",
+        "rule_id": "r_ce002_d01",
+        "stage": "detect",
+        "target": "raw_sentence",
+        "pattern": "(?:[간갠갼걘건겐견곈곤관괜괸굔군권궨귄균근긘긴깐깬꺈꺤껀껜껸꼔꼰꽌꽨꾄꾠꾼꿘꿴뀐뀬끈끤낀난낸냔냰넌넨년녠논놘놴뇐뇬눈눤뉀뉜뉸는늰닌단댄댠댼던덴뎐뎬돈돤됀된됸둔둰뒌뒨듄든듼딘딴땐땬떈떤뗀뗜뗸똔똰뙌뙨뚄뚠뚼뛘뛴뜐뜬띈띤란랜랸럔런렌련롄론롼뢘뢴룐룬뤈뤤륀륜른린만맨먄먠먼멘면몐몬뫈뫤묀묜문뭔뭰뮌뮨믄믠민반밴뱐뱬번벤변볜본봔봰뵌뵨분붠붼뷘뷴븐븬빈빤뺀뺜뺸뻔뻰뼌뼨뽄뽠뽼뾘뾴뿐뿬쀈쀤쁀쁜쁸삔산샌샨섄선센션셴손솬쇈쇤숀순숸쉔쉰슌슨싄신싼쌘쌴썐썬쎈쎤쏀쏜쏸쐔쐰쑌쑨쒄쒠쒼쓘쓴씐씬안앤얀얜언엔연옌온완왠왼욘운원웬윈윤은읜인잔잰쟌쟨전젠젼졘존좐좬죈죤준줜줸쥔쥰즌즨진짠짼쨘쨴쩐쩬쪈쪤쫀쫜쫸쬔쬰쭌쭨쮄쮠쮼쯘쯴찐찬챈챤첀천첸쳔쳰촌촨쵄쵠쵼춘춴췐췬츈츤칀친칸캔캰컌컨켄켠켼콘콴쾐쾬쿈쿤퀀퀜퀸큔큰킌킨탄탠탼턘턴텐텬톈톤퇀퇜퇸툔툰퉌퉨튄튠튼틘틴판팬퍈퍤펀펜편폔폰퐌퐨푄푠푼풘풴퓐퓬픈픤핀한핸햔햰헌헨현혠혼환홴횐횬훈훤휀휜휸흔흰힌]|[ㄴ]|는)데(?:요)?(?![.?!~…]+)",
+        "priority": 10,
+        "hard_fail": false,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      },
+      {
+        "e_id": "ce002",
+        "ruleset_id": "rs_ce002_d01",
+        "rule_id": "r_ce002_d02",
+        "stage": "detect",
+        "target": "raw_sentence",
+        "pattern": "(?:[간갠갼걘건겐견곈곤관괜괸굔군권궨귄균근긘긴깐깬꺈꺤껀껜껸꼔꼰꽌꽨꾄꾠꾼꿘꿴뀐뀬끈끤낀난낸냔냰넌넨년녠논놘놴뇐뇬눈눤뉀뉜뉸는늰닌단댄댠댼던덴뎐뎬돈돤됀된됸둔둰뒌뒨듄든듼딘딴땐땬떈떤뗀뗜뗸똔똰뙌뙨뚄뚠뚼뛘뛴뜐뜬띈띤란랜랸럔런렌련롄론롼뢘뢴룐룬뤈뤤륀륜른린만맨먄먠먼멘면몐몬뫈뫤묀묜문뭔뭰뮌뮨믄믠민반밴뱐뱬번벤변볜본봔봰뵌뵨분붠붼뷘뷴븐븬빈빤뺀뺜뺸뻔뻰뼌뼨뽄뽠뽼뾘뾴뿐뿬쀈쀤쁀쁜쁸삔산샌샨섄선센션셴손솬쇈쇤숀순숸쉔쉰슌슨싄신싼쌘쌴썐썬쎈쎤쏀쏜쏸쐔쐰쑌쑨쒄쒠쒼쓘쓴씐씬안앤얀얜언엔연옌온완왠왼욘운원웬윈윤은읜인잔잰쟌쟨전젠젼졘존좐좬죈죤준줜줸쥔쥰즌즨진짠짼쨘쨴쩐쩬쪈쪤쫀쫜쫸쬔쬰쭌쭨쮄쮠쮼쯘쯴찐찬챈챤첀천첸쳔쳰촌촨쵄쵠쵼춘춴췐췬츈츤칀친칸캔캰컌컨켄켠켼콘콴쾐쾬쿈쿤퀀퀜퀸큔큰킌킨탄탠탼턘턴텐텬톈톤퇀퇜퇸툔툰퉌퉨튄튠튼틘틴판팬퍈퍤펀펜편폔폰퐌퐨푄푠푼풘풴퓐퓬픈픤핀한핸햔햰헌헨현혠혼환홴횐횬훈훤휀휜휸흔흰힌]|[ㄴ]|는)데(?:요)?(?![.?!~…]+)",
+        "priority": 20,
+        "hard_fail": false,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      }
+    ],
+    "rs_ce002_v01": [
+      {
+        "e_id": "ce002",
+        "ruleset_id": "rs_ce002_v01",
+        "rule_id": "r_ce002_v06",
+        "stage": "verify",
+        "target": "char_window",
+        "pattern": "(?:가운데|그런데|군데|데다가|[펜엔]데믹)",
+        "priority": 5,
+        "hard_fail": true,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      },
+      {
+        "e_id": "ce002",
+        "ruleset_id": "rs_ce002_v01",
+        "rule_id": "r_ce002_v07",
+        "stage": "verify",
+        "target": "char_window",
+        "pattern": "(?:^|[^가-힣])운데(?:$|[^가-힣])",
+        "priority": 6,
+        "hard_fail": true,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      },
+      {
+        "e_id": "ce002",
+        "ruleset_id": "rs_ce002_v01",
+        "rule_id": "r_ce002_v03",
+        "stage": "verify",
+        "target": "raw_sentence",
+        "pattern": "r\"(?:는데다가|는\\s*데다가|데다가)\"",
+        "priority": 50,
+        "hard_fail": true,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      }
+    ],
+    "rs_ce003_d01": [
+      {
+        "e_id": "ce003",
+        "ruleset_id": "rs_ce003_d01",
+        "rule_id": "r_ce003_d01",
+        "stage": "detect",
+        "target": "raw_sentence",
+        "pattern": "(?:[간갠갼걘건겐견곈곤관괜괸굔군권궨귄균근긘긴깐깬꺈꺤껀껜껸꼔꼰꽌꽨꾄꾠꾼꿘꿴뀐뀬끈끤낀난낸냔냰넌넨년녠논놘놴뇐뇬눈눤뉀뉜뉸는늰닌단댄댠댼던덴뎐뎬돈돤됀된됸둔둰뒌뒨듄든듼딘딴땐땬떈떤뗀뗜뗸똔똰뙌뙨뚄뚠뚼뛘뛴뜐뜬띈띤란랜랸럔런렌련롄론롼뢘뢴룐룬뤈뤤륀륜른린만맨먄먠먼멘면몐몬뫈뫤묀묜문뭔뭰뮌뮨믄믠민반밴뱐뱬번벤변볜본봔봰뵌뵨분붠붼뷘뷴븐븬빈빤뺀뺜뺸뻔뻰뼌뼨뽄뽠뽼뾘뾴뿐뿬쀈쀤쁀쁜쁸삔산샌샨섄선센션셴손솬쇈쇤숀순숸쉔쉰슌슨싄신싼쌘쌴썐썬쎈쎤쏀쏜쏸쐔쐰쑌쑨쒄쒠쒼쓘쓴씐씬안앤얀얜언엔연옌온완왠왼욘운원웬윈윤은읜인잔잰쟌쟨전젠젼졘존좐좬죈죤준줜줸쥔쥰즌즨진짠짼쨘쨴쩐쩬쪈쪤쫀쫜쫸쬔쬰쭌쭨쮄쮠쮼쯘쯴찐찬챈챤첀천첸쳔쳰촌촨쵄쵠쵼춘춴췐췬츈츤칀친칸캔캰컌컨켄켠켼콘콴쾐쾬쿈쿤퀀퀜퀸큔큰킌킨탄탠탼턘턴텐텬톈톤퇀퇜퇸툔툰퉌퉨튄튠튼틘틴판팬퍈퍤펀펜편폔폰퐌퐨푄푠푼풘풴퓐퓬픈픤핀한핸햔햰헌헨현혠혼환홴횐횬훈훤휀휜휸흔흰힌]|[ㄴ]|는)데(?:요)?(?![.?!~…]+)",
+        "priority": 10,
+        "hard_fail": false,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      },
+      {
+        "e_id": "ce003",
+        "ruleset_id": "rs_ce003_d01",
+        "rule_id": "r_ce003_d02",
+        "stage": "detect",
+        "target": "raw_sentence",
+        "pattern": "(?:[간갠갼걘건겐견곈곤관괜괸굔군권궨귄균근긘긴깐깬꺈꺤껀껜껸꼔꼰꽌꽨꾄꾠꾼꿘꿴뀐뀬끈끤낀난낸냔냰넌넨년녠논놘놴뇐뇬눈눤뉀뉜뉸는늰닌단댄댠댼던덴뎐뎬돈돤됀된됸둔둰뒌뒨듄든듼딘딴땐땬떈떤뗀뗜뗸똔똰뙌뙨뚄뚠뚼뛘뛴뜐뜬띈띤란랜랸럔런렌련롄론롼뢘뢴룐룬뤈뤤륀륜른린만맨먄먠먼멘면몐몬뫈뫤묀묜문뭔뭰뮌뮨믄믠민반밴뱐뱬번벤변볜본봔봰뵌뵨분붠붼뷘뷴븐븬빈빤뺀뺜뺸뻔뻰뼌뼨뽄뽠뽼뾘뾴뿐뿬쀈쀤쁀쁜쁸삔산샌샨섄선센션셴손솬쇈쇤숀순숸쉔쉰슌슨싄신싼쌘쌴썐썬쎈쎤쏀쏜쏸쐔쐰쑌쑨쒄쒠쒼쓘쓴씐씬안앤얀얜언엔연옌온완왠왼욘운원웬윈윤은읜인잔잰쟌쟨전젠젼졘존좐좬죈죤준줜줸쥔쥰즌즨진짠짼쨘쨴쩐쩬쪈쪤쫀쫜쫸쬔쬰쭌쭨쮄쮠쮼쯘쯴찐찬챈챤첀천첸쳔쳰촌촨쵄쵠쵼춘춴췐췬츈츤칀친칸캔캰컌컨켄켠켼콘콴쾐쾬쿈쿤퀀퀜퀸큔큰킌킨탄탠탼턘턴텐텬톈톤퇀퇜퇸툔툰퉌퉨튄튠튼틘틴판팬퍈퍤펀펜편폔폰퐌퐨푄푠푼풘풴퓐퓬픈픤핀한핸햔햰헌헨현혠혼환홴횐횬훈훤휀휜휸흔흰힌]|[ㄴ]|는)데(?:요)?(?![.?!~…]+)",
+        "priority": 20,
+        "hard_fail": false,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      }
+    ],
+    "rs_ce003_v01": [
+      {
+        "e_id": "ce003",
+        "ruleset_id": "rs_ce003_v01",
+        "rule_id": "r_ce003_v06",
+        "stage": "verify",
+        "target": "char_window",
+        "pattern": "(?:가운데|그런데|군데|데다가|[펜엔]데믹)",
+        "priority": 5,
+        "hard_fail": true,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      },
+      {
+        "e_id": "ce003",
+        "ruleset_id": "rs_ce003_v01",
+        "rule_id": "r_ce003_v07",
+        "stage": "verify",
+        "target": "char_window",
+        "pattern": "(?:^|[^가-힣])운데(?:$|[^가-힣])",
+        "priority": 6,
+        "hard_fail": true,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      },
+      {
+        "e_id": "ce003",
+        "ruleset_id": "rs_ce003_v01",
+        "rule_id": "r_ce003_v03",
+        "stage": "verify",
+        "target": "raw_sentence",
+        "pattern": "r\"(?:는데다가|는\\s*데다가|데다가)\"",
+        "priority": 50,
+        "hard_fail": true,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      }
+    ],
+    "rs_df003_d01": [
+      {
+        "e_id": "df003",
+        "ruleset_id": "rs_df003_d01",
+        "rule_id": "r_df003_d01",
+        "stage": "detect",
+        "target": "raw_sentence",
+        "pattern": "적(?:\\s*(?:이|가|은|는|도|만|조차|까지))?[^\\n]{0,200}?(?:있|없)",
+        "priority": 10,
+        "hard_fail": false,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      }
+    ],
+    "rs_df004_d01": [
+      {
+        "e_id": "df004",
+        "ruleset_id": "rs_df004_d01",
+        "rule_id": "r_df004_d01",
+        "stage": "detect",
+        "target": "raw_sentence",
+        "pattern": "고(?!\\s*정말)(?!\\s*,)[^\\n]{0,2}?(?<!연)(?<!월)(?<!주)(?<!아무)(?<!회)(?<!반)(?<!막)(?<!고추 )말(?!\\s*(?:실수|다툼|싸움|보다|했|할|하|씀|해|한|함|을|은|이|에|도|만|들|끝|문|풍선|렸|릴|리|린|려|미|수|로|소|라|고|자|바))(?!(?:실수|다툼|싸움|보다|했|할|하|씀|해|한|함|을|은|이|에|도|만|들|끝|문|풍선|렸|릴|리|린|려|미|수|로|소|라|고|자|바))",
+        "priority": 10,
+        "hard_fail": false,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      }
+    ],
+    "rs_df005_d01": [
+      {
+        "e_id": "df005",
+        "ruleset_id": "rs_df005_d01",
+        "rule_id": "r_df005_d01",
+        "stage": "detect",
+        "target": "raw_sentence",
+        "pattern": "고(?!\\s*정말)(?!\\s*,)[^\\n]{0,2}?(?<!연)(?<!월)(?<!주)(?<!아무)(?<!회)(?<!반)(?<!막)(?<!고추 )말(?!\\s*(?:실수|다툼|싸움|보다|했|할|하|씀|해|한|함|을|은|이|에|도|만|들|끝|문|풍선|렸|릴|리|린|려|미|수|로|소|라|고|자|바))(?!(?:실수|다툼|싸움|보다|했|할|하|씀|해|한|함|을|은|이|에|도|만|들|끝|문|풍선|렸|릴|리|린|려|미|수|로|소|라|고|자|바))",
+        "priority": 10,
+        "hard_fail": false,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      }
+    ],
+    "rs_pt001_d01": [
+      {
+        "e_id": "pt001",
+        "ruleset_id": "rs_pt001_d01",
+        "rule_id": "r_pt001_d01",
+        "stage": "detect",
+        "target": "raw_sentence",
+        "pattern": "까지",
+        "priority": 10,
+        "hard_fail": false,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      },
+      {
+        "e_id": "pt001",
+        "ruleset_id": "rs_pt001_d01",
+        "rule_id": "r_pt001_d02",
+        "stage": "detect",
+        "target": "raw_sentence",
+        "pattern": "까\\s*지",
+        "priority": 20,
+        "hard_fail": false,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      }
+    ],
+    "rs_pt002_d01": [
+      {
+        "e_id": "pt002",
+        "ruleset_id": "rs_pt002_d01",
+        "rule_id": "r_pt002_d01",
+        "stage": "detect",
+        "target": "raw_sentence",
+        "pattern": "까지",
+        "priority": 10,
+        "hard_fail": false,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      },
+      {
+        "e_id": "pt002",
+        "ruleset_id": "rs_pt002_d01",
+        "rule_id": "r_pt002_d02",
+        "stage": "detect",
+        "target": "raw_sentence",
+        "pattern": "까\\s*지",
+        "priority": 20,
+        "hard_fail": false,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      }
+    ],
+    "rs_pt003_d01": [
+      {
+        "e_id": "pt003",
+        "ruleset_id": "rs_pt003_d01",
+        "rule_id": "r_pt003_d01",
+        "stage": "detect",
+        "target": "raw_sentence",
+        "pattern": "까지",
+        "priority": 10,
+        "hard_fail": false,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      },
+      {
+        "e_id": "pt003",
+        "ruleset_id": "rs_pt003_d01",
+        "rule_id": "r_pt003_d02",
+        "stage": "detect",
+        "target": "raw_sentence",
+        "pattern": "까\\s*지",
+        "priority": 20,
+        "hard_fail": false,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      }
+    ]
+  },
+  "polysets_by_id": {
+    "ps_go_mal": {
+      "polyset_id": "ps_go_mal",
+      "member_e_ids": [
+        "df004",
+        "df005"
+      ],
+      "detect_form": "고 말"
+    },
+    "ps_kkaji": {
+      "polyset_id": "ps_kkaji",
+      "member_e_ids": [
+        "pt001",
+        "pt002",
+        "pt003"
+      ],
+      "detect_form": "까지"
+    },
+    "ps_neunde": {
+      "polyset_id": "ps_neunde",
+      "member_e_ids": [
+        "ce002",
+        "ce003"
+      ],
+      "detect_form": "ㄴ/은/는데"
+    }
+  },
+  "runtime_units": {
+    "ce001": {
+      "unit_id": "ce001",
+      "unit_type": "item",
+      "group": "b",
+      "member_e_ids": [
+        "ce001"
+      ],
+      "canonical_form": "다면",
+      "detect_ruleset_ids": [
+        "rs_ce001_d01"
+      ],
+      "verify_ruleset_ids": [
+        "rs_ce001_v01"
+      ]
+    },
+    "df003": {
+      "unit_id": "df003",
+      "unit_type": "item",
+      "group": "b",
+      "member_e_ids": [
+        "df003"
+      ],
+      "canonical_form": "ㄴ/은 적 있/없",
+      "detect_ruleset_ids": [
+        "rs_df003_d01"
+      ],
+      "verify_ruleset_ids": [
+        "rs_df003_v01"
+      ]
+    },
+    "ps_go_mal": {
+      "unit_id": "ps_go_mal",
+      "unit_type": "polyset",
+      "group": "c",
+      "member_e_ids": [
+        "df004",
+        "df005"
+      ],
+      "canonical_form": "고 말",
+      "detect_ruleset_ids": [
+        "rs_df004_d01",
+        "rs_df005_d01"
+      ],
+      "verify_ruleset_ids": [
+        "rs_df004_v01",
+        "rs_df005_v01"
+      ]
+    },
+    "ps_kkaji": {
+      "unit_id": "ps_kkaji",
+      "unit_type": "polyset",
+      "group": "c",
+      "member_e_ids": [
+        "pt001",
+        "pt002",
+        "pt003"
+      ],
+      "canonical_form": "까지",
+      "detect_ruleset_ids": [
+        "rs_pt001_d01",
+        "rs_pt002_d01",
+        "rs_pt003_d01"
+      ],
+      "verify_ruleset_ids": [
+        "rs_pt001_v01",
+        "rs_pt002_v01",
+        "rs_pt003_v01"
+      ]
+    },
+    "ps_neunde": {
+      "unit_id": "ps_neunde",
+      "unit_type": "polyset",
+      "group": "c",
+      "member_e_ids": [
+        "ce002",
+        "ce003"
+      ],
+      "canonical_form": "ㄴ/은/는데",
+      "detect_ruleset_ids": [
+        "rs_ce002_d01",
+        "rs_ce003_d01"
+      ],
+      "verify_ruleset_ids": [
+        "rs_ce002_v01",
+        "rs_ce003_v01"
+      ]
+    }
+  },
+  "warnings": [
+    "detect_rules:4 pattern looks like a Python string literal for rule_id=r_ce002_v03",
+    "detect_rules:9 pattern looks like a Python string literal for rule_id=r_ce003_v03",
+    "items e_id=df004 verify_ruleset_id missing in detect_rules: rs_df004_v01",
+    "items e_id=df005 verify_ruleset_id missing in detect_rules: rs_df005_v01",
+    "items e_id=pt001 verify_ruleset_id missing in detect_rules: rs_pt001_v01",
+    "items e_id=pt002 verify_ruleset_id missing in detect_rules: rs_pt002_v01",
+    "items e_id=pt003 verify_ruleset_id missing in detect_rules: rs_pt003_v01",
+    "items e_id=df003 verify_ruleset_id missing in detect_rules: rs_df003_v01"
+  ]
+}

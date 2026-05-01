@@ -1,5 +1,7 @@
 {
   "item_id": "df003",
+  "eval_mode": "regex_versions",
+  "eval_id": "v1",
   "regex_version": "v1",
   "pattern": "[가-힣]+\\s*적\\s*(?:은|는|이|도|만)?\\s*.{0,20}?(?:있|없)",
   "match_policy": "overlap",
@@ -7,5 +9,5 @@
   "gold_matched": 50,
   "gold_recall": 1.0,
   "fn_count": 0,
-  "created_at": "2026-05-01T11:20:37.352666+00:00"
+  "created_at": "2026-05-01T12:33:26.156160+00:00"
 }

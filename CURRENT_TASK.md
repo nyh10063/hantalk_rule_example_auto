@@ -5,7 +5,7 @@
 - Current phase: Phase 1 pilot
 - Current item: df003 `ㄴ/은 적 있/없`
 - Current project goal: 300개 문법항목의 검색용 정규식 및 오탐 필터링 인코더용 positive/negative 예문 구축 자동화
-- Current immediate goal: `dict.xlsx` 기반 `export_bundle.py`, DetectorEngine 최소형, `src/test_gold.py`의 DetectorEngine 기반 리팩터링
+- Current immediate goal: df003 bundle 기반 DetectorEngine 결과를 뉴스/일상 대화 말뭉치 각 5,000행 batch에 적용하는 corpus search CLI 준비
 
 ## 현재까지 완료
 
@@ -36,6 +36,12 @@
 - `src/test_gold.py` 구현 완료
 - df003 v1 정규식의 gold 50개 기준 recall이 1.0임을 확인함
 - df003 v2 bridge candidate 정규식의 gold 50개 기준 recall이 1.0임을 확인함
+- `src/detector/export_bundle.py` 구현 완료
+- `src/detector/engine.py` DetectorEngine 최소형 구현 완료
+- `src/detector/span_utils.py` 구현 완료
+- `configs/detector/detector_bundle.json` 생성 완료
+- `src/test_gold.py`에 DetectorEngine bundle 평가 경로 추가 완료
+- df003 bundle 경로의 gold 50개 기준 sentence recall과 span overlap recall이 1.0임을 확인함
 
 ## 이번에 테스트한 것
 
@@ -47,13 +53,19 @@
 - `python3 src/test_gold.py --item-id df003 --regex-version v2_bridge_candidate --fail-on-fn` 실행 결과 `gold_total=50`, `gold_matched=50`, `gold_recall=1.0`, `fn_count=0`을 확인함
 - `rg`로 긴 활용형 중심의 df003 명명 표현이 남아 있지 않음을 확인함
 - `regex/df003_versions.jsonl` JSONL 파싱이 정상임을 확인함
+- `python3 -m py_compile src/detector/export_bundle.py src/detector/engine.py src/detector/span_utils.py src/test_gold.py` 통과
+- `python3 -m src.detector.export_bundle --dict datasets/dict/dict.xlsx --out configs/detector/detector_bundle.json` 통과
+- bundle export 결과: `items=9`, `runtime_units=5`, `warnings=8`
+- df003 bundle 평가(sentence): `gold_total=50`, `gold_matched=50`, `gold_recall=1.0`, `span_overlap_recall=1.0`, `span_exact_recall=0.0`, `fn_count=0`
+- df003 bundle 평가(overlap): `gold_total=50`, `gold_matched=50`, `gold_recall=1.0`, `span_overlap_recall=1.0`, `span_exact_recall=0.0`, `fn_count=0`
+- 직접 detect 확인: `"저는 제주도에 가 본 적이 있어요."`에서 1차 DetectorEngine은 `span_segments=[[12, 16]]`, `span_text="적이 있"`, `span_source="regex_match"`, `component_span_enabled=false`를 출력함
 
 ## 다음 작업
 
-1. `src/detector/export_bundle.py` 구현: `datasets/dict/dict.xlsx`에서 detector bundle JSON 생성
-2. DetectorEngine 최소형 구현: bundle 로딩, compiled regex, df003 detect, `span_segments` 최소 출력
-3. `src/test_gold.py`를 DetectorEngine 기반으로 리팩터링
-4. 이후 df003 v1/v2를 뉴스/일상 대화 말뭉치 각 5,000행 batch에 적용하는 corpus search CLI 구현
+1. df003 bundle 기반 DetectorEngine을 뉴스/일상 대화 말뭉치 각 5,000행 batch에 적용하는 corpus search CLI 구현
+2. detection JSONL과 사람 검수용 CSV 형식 재검토
+3. `span_source=regex_match` 후보를 검수표에서 교육적 최종 span으로 오해하지 않도록 표시
+4. 다음 단계에서 component 기반 교육적 span 조립 구현 여부 검토
 
 ## 주의사항
 
@@ -75,6 +87,8 @@
 - 브릿지에 사용할 형태소 분석기 선택, Kiwi 상업 라이선스/속도/정확도, 다른 형태소 분석기 후보 비교가 아직 필요합니다.
 - 문장 단위 형태소 분석 cache를 전체 300개 규칙에 공유할지, 난이도/목표 항목에 따라 필요한 규칙에만 공유할지는 HanTalk 본 시스템 설계 단계에서 다시 결정해야 합니다.
 - `PROJECT_SPEC.md`의 `향후 detector 설계 검토 메모`는 SSOT가 아니라 비-SSOT 검토 목록입니다. 구현 전 다시 검토해야 합니다.
+- 1차 DetectorEngine의 df003 span은 `적이 있`처럼 regex match span이며, 최종 교육적 span인 `본 적 ... 있`이 아닙니다.
+- `detector_bundle.json` 생성 시 경고 8개가 있습니다. 특히 일부 pattern literal 의심 경고와 몇몇 verify_ruleset_id 누락 경고는 다음 dict 정리 때 확인해야 합니다.
 
 
 ## 2026-04-30 업무 시작 점검
@@ -272,3 +286,24 @@
 - 위 3개를 제외한 나머지 제안은 다음 단계 검토 목록으로 보류함.
 - 보류한 주요 항목: runtime bundle/cache, `group=c` polyset 단위 detect, detect profile, `active_unit_ids`/`teaching_target_e_ids` 분리, `span_segments` 중심 output schema, detection JSONL/review CSV 분리, offline `audit_rules.py`, group=c verify hard_fail 정책.
 - 이 항목들은 당장 확정하지 않지만, corpus search와 HanTalk 실시간 detect를 같은 DetectorEngine 계열로 이어가기 위해 다음 구현 단계에서 반드시 다시 검토함.
+
+## 2026-05-01 detector bundle 1차 구현
+
+- `src/detector/__init__.py`, `src/detector/export_bundle.py`, `src/detector/engine.py`, `src/detector/span_utils.py`를 추가함.
+- `export_bundle.py`는 `datasets/dict/dict.xlsx`를 읽어 `configs/detector/detector_bundle.json`을 생성함.
+- bundle에는 `items_by_e_id`, `components_by_e_id`, `rules_by_ruleset_id`, `polysets_by_id`, `runtime_units`, `warnings`를 포함함.
+- regex compile 실패, 필수 sheet/column 누락, 중복 ID, 잘못된 group/stage/target은 fatal error로 처리함.
+- Excel blank/boolean/int/string 값을 runtime JSON에 맞게 normalize하고, JSON 저장 시 `allow_nan=False`를 사용함.
+- DetectorEngine은 bundle 로딩, compiled regex cache, `active_unit_ids`, detect raw_sentence, verify hard_fail raw_sentence/char_window, summary count를 지원함.
+- `char_window.window_chars`는 후보 envelope 기준 좌우 각각 N자로 정의함.
+- 1차 DetectorEngine candidate는 `span_source=regex_match`, `component_span_enabled=false`를 명시함.
+- `src/test_gold.py`는 기존 `regex_versions` 평가 경로를 유지하면서 `--bundle`, `--active-unit-id`, `--bundle-match-policy` 옵션을 추가함.
+- bundle 평가에서는 future-proof하게 `candidate.unit_id == item_id` 또는 `item_id in member_e_ids`를 item match로 처리함.
+- `PROJECT_SPEC.md`와 `DECISIONS.md`에 `dict.xlsx` SSOT/runtime bundle, `span_segments`, 1차 regex_match span 정책을 기록함.
+- 검증:
+  - `python3 -m py_compile src/detector/export_bundle.py src/detector/engine.py src/detector/span_utils.py src/test_gold.py`
+  - `python3 -m src.detector.export_bundle --dict datasets/dict/dict.xlsx --out configs/detector/detector_bundle.json`
+  - `python3 src/test_gold.py --item-id df003 --bundle configs/detector/detector_bundle.json --active-unit-id df003 --fail-on-fn`
+  - `python3 src/test_gold.py --item-id df003 --bundle configs/detector/detector_bundle.json --active-unit-id df003 --bundle-match-policy overlap --fail-on-fn`
+  - `python3 src/test_gold.py --item-id df003 --regex-version v1 --fail-on-fn`
+  - `python3 src/test_gold.py --item-id df003 --regex-version v2_bridge_candidate --fail-on-fn`

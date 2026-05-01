@@ -15,6 +15,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+try:
+    from detector.engine import DetectorEngine
+    from detector.span_utils import spans_overlap
+except ImportError:  # pragma: no cover - supports `python -m src.test_gold`.
+    from src.detector.engine import DetectorEngine
+    from src.detector.span_utils import spans_overlap
+
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
@@ -105,6 +112,16 @@ def _is_matched(
     )
 
 
+def _candidate_matches_item(candidate: dict[str, Any], item_id: str) -> bool:
+    return candidate.get("unit_id") == item_id or item_id in (candidate.get("member_e_ids") or [])
+
+
+def _candidate_exact(candidate: dict[str, Any], spans: list[tuple[int, int, str]]) -> bool:
+    candidate_segments = [[int(start), int(end)] for start, end in candidate.get("span_segments") or []]
+    gold_segments = [[int(start), int(end)] for start, end, _ in spans]
+    return candidate_segments == gold_segments
+
+
 def evaluate(
     *,
     item_id: str,
@@ -152,6 +169,8 @@ def evaluate(
     recall = matched_count / total if total else 0.0
     return {
         "item_id": item_id,
+        "eval_mode": "regex_versions",
+        "eval_id": str(regex_record.get("regex_version")),
         "regex_version": regex_record.get("regex_version"),
         "pattern": pattern_text,
         "match_policy": match_policy,
@@ -159,6 +178,97 @@ def evaluate(
         "gold_matched": matched_count,
         "gold_recall": recall,
         "fn_count": len(fn_records),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "fn_records": fn_records,
+    }
+
+
+def evaluate_detector_bundle(
+    *,
+    item_id: str,
+    engine: DetectorEngine,
+    gold_records: list[dict[str, Any]],
+    active_unit_ids: list[str],
+    bundle_match_policy: str,
+) -> dict[str, Any]:
+    selected_gold = [r for r in gold_records if r.get("item_id") == item_id]
+    fn_records: list[dict[str, Any]] = []
+    matched_records: list[dict[str, Any]] = []
+    sentence_matched_count = 0
+    span_overlap_count = 0
+    span_exact_count = 0
+    hard_failed_total = 0
+
+    for record in selected_gold:
+        sentence = str(record.get("sentence") or "")
+        spans = _target_spans(record)
+        detector_result = engine.detect(sentence, active_unit_ids=active_unit_ids, text_id=str(record.get("example_id") or ""))
+        candidates = [c for c in detector_result.get("candidates", []) if _candidate_matches_item(c, item_id)]
+        rejected_candidates = [
+            c for c in detector_result.get("rejected_candidates", []) if _candidate_matches_item(c, item_id)
+        ]
+        hard_failed_total += len(rejected_candidates)
+
+        sentence_matched = bool(candidates)
+        span_overlap = any(
+            spans_overlap(candidate.get("span_segments") or [], [[start, end] for start, end, _ in spans])
+            for candidate in candidates
+        )
+        span_exact = any(_candidate_exact(candidate, spans) for candidate in candidates)
+        if sentence_matched:
+            sentence_matched_count += 1
+        if span_overlap:
+            span_overlap_count += 1
+        if span_exact:
+            span_exact_count += 1
+
+        matched = sentence_matched if bundle_match_policy == "sentence" else span_overlap
+        row = {
+            "item_id": item_id,
+            "eval_mode": "detector_bundle",
+            "example_id": record.get("example_id"),
+            "source_example_id": record.get("source_example_id"),
+            "split": record.get("split"),
+            "pattern_type": record.get("pattern_type"),
+            "gold_example_role": record.get("gold_example_role"),
+            "target_text": record.get("target_text"),
+            "target_spans": record.get("target_spans"),
+            "sentence_matched": sentence_matched,
+            "span_overlap": span_overlap,
+            "span_exact": span_exact,
+            "candidates": candidates,
+            "rejected_candidates": rejected_candidates,
+            "detector_summary": detector_result.get("summary"),
+            "sentence": sentence,
+        }
+        if matched:
+            matched_records.append(row)
+        else:
+            fn_records.append(row)
+
+    total = len(selected_gold)
+    matched_count = len(matched_records)
+    recall = matched_count / total if total else 0.0
+    return {
+        "item_id": item_id,
+        "eval_mode": "detector_bundle",
+        "eval_id": "bundle_" + "_".join(active_unit_ids) + f"_{bundle_match_policy}",
+        "bundle_path": engine.bundle_path,
+        "active_unit_ids": active_unit_ids,
+        "bundle_match_policy": bundle_match_policy,
+        "span_source": "regex_match",
+        "component_span_enabled": False,
+        "gold_total": total,
+        "gold_matched": matched_count,
+        "gold_recall": recall,
+        "fn_count": len(fn_records),
+        "sentence_matched_count": sentence_matched_count,
+        "sentence_recall": sentence_matched_count / total if total else 0.0,
+        "span_overlap_count": span_overlap_count,
+        "span_overlap_recall": span_overlap_count / total if total else 0.0,
+        "span_exact_count": span_exact_count,
+        "span_exact_recall": span_exact_count / total if total else 0.0,
+        "hard_failed_candidate_count": hard_failed_total,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "fn_records": fn_records,
     }
@@ -180,6 +290,19 @@ def parse_args() -> argparse.Namespace:
         help="Regex versions JSONL path. Default: regex/{item_id}_versions.jsonl",
     )
     parser.add_argument("--regex-version", default="latest", help="Regex version id or latest.")
+    parser.add_argument("--bundle", type=Path, default=None, help="Detector bundle path for DetectorEngine evaluation.")
+    parser.add_argument(
+        "--active-unit-id",
+        action="append",
+        default=None,
+        help="Runtime unit id to execute in bundle mode. Repeat to enable multiple units. Default: item id.",
+    )
+    parser.add_argument(
+        "--bundle-match-policy",
+        choices=["sentence", "overlap"],
+        default="sentence",
+        help="Bundle mode pass criterion. sentence uses any candidate for the item; overlap requires candidate/gold span overlap.",
+    )
     parser.add_argument(
         "--match-policy",
         choices=["overlap", "sentence"],
@@ -199,33 +322,55 @@ def main() -> int:
     versions_path = args.versions or Path("regex") / f"{item_id}_versions.jsonl"
 
     try:
-        regex_records = _read_jsonl(versions_path)
-        regex_record = _select_regex_version(regex_records, item_id, args.regex_version)
         gold_records = _read_jsonl(gold_path)
-        result = evaluate(
-            item_id=item_id,
-            regex_record=regex_record,
-            gold_records=gold_records,
-            match_policy=args.match_policy,
-        )
+        if args.bundle:
+            active_unit_ids = args.active_unit_id or [item_id]
+            engine = DetectorEngine.from_bundle(args.bundle)
+            result = evaluate_detector_bundle(
+                item_id=item_id,
+                engine=engine,
+                gold_records=gold_records,
+                active_unit_ids=active_unit_ids,
+                bundle_match_policy=args.bundle_match_policy,
+            )
+        else:
+            regex_records = _read_jsonl(versions_path)
+            regex_record = _select_regex_version(regex_records, item_id, args.regex_version)
+            result = evaluate(
+                item_id=item_id,
+                regex_record=regex_record,
+                gold_records=gold_records,
+                match_policy=args.match_policy,
+            )
     except Exception as exc:  # noqa: BLE001 - CLI should print friendly error.
         print(f"[ERROR] {exc}", file=sys.stderr)
         return 2
 
-    version = result["regex_version"]
-    report_path = args.report or Path("logs") / f"{item_id}_gold_eval_{version}.json"
-    fn_report_path = args.fn_report or Path("logs") / f"{item_id}_fn_report_{version}.jsonl"
+    eval_id = result["eval_id"]
+    report_path = args.report or Path("logs") / f"{item_id}_gold_eval_{eval_id}.json"
+    fn_report_path = args.fn_report or Path("logs") / f"{item_id}_fn_report_{eval_id}.jsonl"
 
     fn_records = result.pop("fn_records")
     _write_json(report_path, result)
     _write_jsonl(fn_report_path, fn_records)
 
+    print(f"eval_mode={result['eval_mode']}")
     print(f"item_id={result['item_id']}")
-    print(f"regex_version={result['regex_version']}")
-    print(f"match_policy={result['match_policy']}")
+    if result["eval_mode"] == "regex_versions":
+        print(f"regex_version={result['regex_version']}")
+        print(f"match_policy={result['match_policy']}")
+    else:
+        print(f"bundle={result['bundle_path']}")
+        print(f"active_unit_ids={','.join(result['active_unit_ids'])}")
+        print(f"bundle_match_policy={result['bundle_match_policy']}")
     print(f"gold_total={result['gold_total']}")
     print(f"gold_matched={result['gold_matched']}")
     print(f"gold_recall={result['gold_recall']:.6f}")
+    if result["eval_mode"] == "detector_bundle":
+        print(f"sentence_recall={result['sentence_recall']:.6f}")
+        print(f"span_overlap_recall={result['span_overlap_recall']:.6f}")
+        print(f"span_exact_recall={result['span_exact_recall']:.6f}")
+        print(f"hard_failed_candidate_count={result['hard_failed_candidate_count']}")
     print(f"fn_count={result['fn_count']}")
     print(f"report={report_path}")
     print(f"fn_report={fn_report_path}")

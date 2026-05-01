@@ -249,6 +249,8 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 ├── CURRENT_TASK.md
 ├── DECISIONS.md
 ├── configs/
+│   └── detector/
+│       └── detector_bundle.json
 ├── exported_gold/
 ├── regex/
 ├── hits/
@@ -267,6 +269,7 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 | 파일/폴더 | 역할 | 만든 주체 | 읽는 주체 |
 | --- | --- | --- | --- |
 | `configs/grammar_items.yaml` | 문법항목 정의와 상태 | 사람 + Codex | 모든 CLI |
+| `configs/detector/detector_bundle.json` | `dict.xlsx`에서 생성한 runtime detector bundle | 자동화 | DetectorEngine |
 | `datasets/gold/gold.xlsx` | 정규식 gold 50개 원본 관리 파일 | 사람 | gold export/validation CLI |
 | `exported_gold/df003_gold_50.jsonl` | `gold.xlsx`에서 자동 생성한 item별 정규식 gold positive 50개 | 자동화 | gold test CLI |
 | `regex/df003_versions.jsonl` | 정규식 버전과 성능 로그 | 자동화 | regex iteration/report CLI |
@@ -355,6 +358,53 @@ engine = re
 - `rule_components.comp_id`는 component span 탐색과 디버깅에 필요하므로 유지합니다.
 - Phase 1에서는 context rule을 사용하지 않습니다.
 
+## Detector runtime 1차 구현 원칙
+
+사람이 관리하는 문법항목 사전의 SSOT는 `datasets/dict/dict.xlsx`입니다. 단, runtime detector는 Excel을 직접 읽지 않습니다. `dict.xlsx`는 아래 명령으로 runtime bundle로 export합니다.
+
+```bash
+python3 -m src.detector.export_bundle \
+  --dict datasets/dict/dict.xlsx \
+  --out configs/detector/detector_bundle.json
+```
+
+runtime detector는 `configs/detector/detector_bundle.json`을 읽고, 정규식을 초기화 시점에 compile/cache하여 사용합니다. 사용자 발화 detect 경로에서 Excel parsing을 반복하지 않는 것이 원칙입니다.
+
+DetectorEngine 1차 구현 범위:
+
+- `detector_bundle.json` 로딩
+- `active_unit_ids` 기준 runtime unit 선택
+- `stage=detect`, `target=raw_sentence` 표면 정규식 실행
+- `stage=verify`, `target=raw_sentence` 또는 `target=char_window` hard_fail 최소 구현
+- candidate span을 `span_segments`로 출력
+
+DetectorEngine 1차 구현의 span 정책:
+
+- `span_segments`는 detector output의 canonical span 표현입니다.
+- span은 Python 0-based `[start, end)` 규칙을 따릅니다.
+- 불연속 표현은 여러 segment로 보존합니다.
+- 1차 DetectorEngine은 아직 component 기반 교육적 span을 조립하지 않습니다.
+- 1차 candidate의 `span_source`는 `regex_match`이고, `component_span_enabled`는 `false`입니다.
+- 따라서 df003 `ㄴ/은 적 있/없`의 1차 출력이 `적이 있`일 수 있습니다. 이는 최종 교육적 span인 `본 적 ... 있`을 완성했다는 뜻이 아닙니다.
+
+DetectorEngine output에는 아래 필드를 넣지 않습니다.
+
+```text
+aliases
+route
+relation_type
+span_start
+span_end
+```
+
+이유:
+
+- `aliases`는 사람이 이해하기 위한 사전 정보이지 detector 후보 출력에는 중복입니다.
+- `route`, `relation_type`은 Phase 1 실시간/예문 구축 경로에 필요하지 않으며 응답속도와 복잡도를 늘릴 수 있습니다.
+- span은 불연속 표현을 지원해야 하므로 단일 `span_start`, `span_end` 대신 `span_segments`를 사용합니다.
+
+`char_window`의 `window_chars`는 후보 span envelope 기준 좌우 각각 N자를 뜻합니다.
+
 ## 향후 detector 설계 검토 메모
 
 이 섹션은 SSOT가 아닙니다. 프로젝트 초반에는 파일 schema, detector 출력 형식, profile 방식이 바뀔 가능성이 크므로, 아래 내용은 확정 설계가 아니라 다음 구현 단계에서 반드시 다시 검토할 후보 목록으로 둡니다.
@@ -369,13 +419,10 @@ src/test_gold.py의 DetectorEngine 기반 리팩터링
 
 위 3개를 제외한 아래 항목들은 당장 구현하지 않고, 다음 단계에서 실행 가능성과 schema 안정성을 검토합니다.
 
-- `dict.xlsx`를 사람이 관리하는 원본으로 두고, runtime detector는 `configs/detector/detector_bundle.json` 같은 export bundle을 읽는 구조.
-- 앱 시작 시 bundle을 1회 로딩하고 정규식을 1회 compile/cache하여 사용자 발화 detect에서는 Excel parsing을 하지 않는 구조.
 - `group=c` 항목을 사용자 실시간 발화 detect에서는 개별 `e_id`가 아니라 `polyset_id` 단위 runtime unit으로 합치는 구조.
 - `group=c`의 특정 의미 판정은 실시간 detect에서 하지 않고, 교수용 패널이나 오류 수정 제안에서 `teaching_target_e_id`로 다루는 구조.
 - `detect_profiles.xlsx` 또는 profile JSON으로 외부에서 detect할 항목 목록을 조절하는 구조.
 - 사람이 관리하는 profile은 `e_id` 기준으로 두되, runtime에서는 `active_unit_ids`와 `teaching_target_e_ids`로 나누어 사용하는 구조.
-- detector 출력에서 불연속 문법항목을 안정적으로 다루기 위해 `span_start`, `span_end`보다 `span_segments`를 canonical span 표현으로 쓰는 구조.
 - corpus search의 primary output을 CSV 하나가 아니라 detection JSONL과 사람 검수용 CSV로 나누는 구조.
 - human review CSV와 encoder 후보 JSONL에 `unit_id`, `unit_type`, `member_e_ids`, `group`, `span_segments`, `span_key`, `span_text`, `detect_rule_ids`, `hard_fail_rule_ids`를 포함하는 구조.
 - 새 문법항목이나 새 규칙을 추가할 때 기존 규칙과의 충돌, hit 수 폭증, 같은 span의 다중 unit 후보, 처리 시간 증가를 점검하는 offline `audit_rules.py`.

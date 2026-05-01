@@ -134,3 +134,15 @@ Reason: 브릿지를 위해 형태소 분석을 규칙마다 반복하면 300개
 ### Decision: 문법항목 명칭은 필수 구성성분 중심으로 기록한다.
 
 Reason: 항목명에 `있다`, `없다`, `있어요`, `없는` 같은 활용형까지 넣으면 300개 문법항목 확장 과정에서 이름과 실제 detect 기준이 흔들릴 수 있다. 따라서 canonical name과 config name은 필수 구성성분 중심으로 기록하고, 활용형은 alias, include criteria, gold 예문, detect rule에서 다룬다. df003의 공식 명칭은 `ㄴ/은 적 있/없`으로 통일한다.
+
+### Decision: `dict.xlsx`는 사람이 관리하는 SSOT이고 runtime은 detector bundle을 사용한다.
+
+Reason: Excel은 사람이 문법항목, 구성요소, 탐지 규칙을 관리하기에는 적합하지만 HanTalk 실시간 사용자 발화 detect 경로에서 반복해서 읽기에는 느리고 불필요하다. 따라서 `datasets/dict/dict.xlsx`를 사람이 관리하는 SSOT로 두고, runtime detector는 자동 생성된 `configs/detector/detector_bundle.json`을 읽는다. DetectorEngine은 bundle을 로딩한 뒤 정규식을 compile/cache하여 사용한다.
+
+### Decision: detector output의 canonical span 표현은 `span_segments`로 한다.
+
+Reason: 한국어 문법항목에는 df003 `ㄴ/은 적 있/없`처럼 불연속 span이 필요한 항목이 있다. 단일 `span_start`, `span_end`만 사용하면 불연속 구성요소를 안정적으로 보존할 수 없으므로 detector output에서는 Python 0-based `[start, end)` segment 목록인 `span_segments`를 canonical span 표현으로 사용한다. `aliases`, `route`, `relation_type`은 Phase 1 detector output에 넣지 않는다.
+
+### Decision: 1차 DetectorEngine의 span은 `regex_match`이며 교육적 최종 span이 아니다.
+
+Reason: 이번 1차 구현은 `dict.xlsx` 기반 runtime bundle과 최소 DetectorEngine을 붙여 gold 문장에서 후보를 빠짐없이 찾는지 검증하는 단계이다. 아직 component 기반 span 조립을 구현하지 않았으므로, candidate에는 `span_source=regex_match`, `component_span_enabled=false`를 기록한다. 예를 들어 df003의 1차 span이 `적이 있`으로 나와도 이는 최종 교육적 span인 `본 적 ... 있`이 완성되었다는 뜻이 아니다.
