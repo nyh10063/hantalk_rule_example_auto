@@ -5,7 +5,7 @@
 - Current phase: Phase 1 pilot
 - Current item: df003 `ㄴ/은 적 있/없`
 - Current project goal: 300개 문법항목의 검색용 정규식 및 오탐 필터링 인코더용 positive/negative 예문 구축 자동화
-- Current immediate goal: df003 v1 정규식을 뉴스/일상 대화 말뭉치 각 5,000행 batch에 적용해 hit 후보를 수집하고, TP/FP 검수표까지 생성하는 최소 Python CLI pipeline 준비
+- Current immediate goal: `dict.xlsx` 기반 `export_bundle.py`, DetectorEngine 최소형, `src/test_gold.py`의 DetectorEngine 기반 리팩터링
 
 ## 현재까지 완료
 
@@ -50,10 +50,10 @@
 
 ## 다음 작업
 
-1. df003 v1 정규식을 뉴스/일상 대화 말뭉치 각 5,000행 batch에 적용하는 corpus search CLI 구현
-2. `hits/df003_corpus_hits.csv` 생성
-3. TP/FP/span 사람 검수용 `labels/df003_human_review.csv` 형식 확정
-4. `gold.xlsx`에서 `exported_gold/{item_id}_gold_50.jsonl`을 생성하는 export 흐름 설계
+1. `src/detector/export_bundle.py` 구현: `datasets/dict/dict.xlsx`에서 detector bundle JSON 생성
+2. DetectorEngine 최소형 구현: bundle 로딩, compiled regex, df003 detect, `span_segments` 최소 출력
+3. `src/test_gold.py`를 DetectorEngine 기반으로 리팩터링
+4. 이후 df003 v1/v2를 뉴스/일상 대화 말뭉치 각 5,000행 batch에 적용하는 corpus search CLI 구현
 
 ## 주의사항
 
@@ -74,6 +74,7 @@
 - 뉴스 말뭉치와 일상 대화 말뭉치의 실제 파일 경로, 행 단위 형식, batch offset 관리 방식이 아직 확정되지 않았습니다.
 - 브릿지에 사용할 형태소 분석기 선택, Kiwi 상업 라이선스/속도/정확도, 다른 형태소 분석기 후보 비교가 아직 필요합니다.
 - 문장 단위 형태소 분석 cache를 전체 300개 규칙에 공유할지, 난이도/목표 항목에 따라 필요한 규칙에만 공유할지는 HanTalk 본 시스템 설계 단계에서 다시 결정해야 합니다.
+- `PROJECT_SPEC.md`의 `향후 detector 설계 검토 메모`는 SSOT가 아니라 비-SSOT 검토 목록입니다. 구현 전 다시 검토해야 합니다.
 
 
 ## 2026-04-30 업무 시작 점검
@@ -262,3 +263,12 @@
 - 이전 프로젝트의 규칙 detect 방식은 그대로 복제하지 않고, 응답속도를 줄이는 조건 아래에서 필요한 detect/span/bridge/cache 아이디어만 참고하기로 재확인함.
 - 검증: 기준 문서/config/regex/plan 파일에서 긴 활용형 중심의 df003 항목명과 alias가 남아 있지 않음을 `rg`로 확인함. 남은 `가 본 적이 있다` 표현은 항목명이 아니라 포함 예시 문장임.
 - 검증: `python3 -m py_compile src/test_gold.py`, `python3 src/test_gold.py --item-id df003 --regex-version v1 --fail-on-fn`, `python3 src/test_gold.py --item-id df003 --regex-version v2_bridge_candidate --fail-on-fn`.
+
+## 2026-05-01 detector 설계 검토 메모 기록
+
+- `PROJECT_SPEC.md`에 `향후 detector 설계 검토 메모` 섹션을 추가함.
+- 해당 섹션은 SSOT가 아니라 비-SSOT 검토 목록으로 명시함. 프로젝트 초반이라 schema와 구현 방식이 바뀔 수 있으므로, 구현 전 반드시 다시 검토해야 함.
+- 바로 다음 구현 범위는 `src/detector/export_bundle.py`, DetectorEngine 최소형, `src/test_gold.py`의 DetectorEngine 기반 리팩터링으로 제한함.
+- 위 3개를 제외한 나머지 제안은 다음 단계 검토 목록으로 보류함.
+- 보류한 주요 항목: runtime bundle/cache, `group=c` polyset 단위 detect, detect profile, `active_unit_ids`/`teaching_target_e_ids` 분리, `span_segments` 중심 output schema, detection JSONL/review CSV 분리, offline `audit_rules.py`, group=c verify hard_fail 정책.
+- 이 항목들은 당장 확정하지 않지만, corpus search와 HanTalk 실시간 detect를 같은 DetectorEngine 계열로 이어가기 위해 다음 구현 단계에서 반드시 다시 검토함.

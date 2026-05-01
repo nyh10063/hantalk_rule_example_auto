@@ -355,6 +355,38 @@ engine = re
 - `rule_components.comp_id`는 component span 탐색과 디버깅에 필요하므로 유지합니다.
 - Phase 1에서는 context rule을 사용하지 않습니다.
 
+## 향후 detector 설계 검토 메모
+
+이 섹션은 SSOT가 아닙니다. 프로젝트 초반에는 파일 schema, detector 출력 형식, profile 방식이 바뀔 가능성이 크므로, 아래 내용은 확정 설계가 아니라 다음 구현 단계에서 반드시 다시 검토할 후보 목록으로 둡니다.
+
+바로 다음 구현 범위는 아래 3개로 제한합니다.
+
+```text
+src/detector/export_bundle.py
+DetectorEngine 최소형
+src/test_gold.py의 DetectorEngine 기반 리팩터링
+```
+
+위 3개를 제외한 아래 항목들은 당장 구현하지 않고, 다음 단계에서 실행 가능성과 schema 안정성을 검토합니다.
+
+- `dict.xlsx`를 사람이 관리하는 원본으로 두고, runtime detector는 `configs/detector/detector_bundle.json` 같은 export bundle을 읽는 구조.
+- 앱 시작 시 bundle을 1회 로딩하고 정규식을 1회 compile/cache하여 사용자 발화 detect에서는 Excel parsing을 하지 않는 구조.
+- `group=c` 항목을 사용자 실시간 발화 detect에서는 개별 `e_id`가 아니라 `polyset_id` 단위 runtime unit으로 합치는 구조.
+- `group=c`의 특정 의미 판정은 실시간 detect에서 하지 않고, 교수용 패널이나 오류 수정 제안에서 `teaching_target_e_id`로 다루는 구조.
+- `detect_profiles.xlsx` 또는 profile JSON으로 외부에서 detect할 항목 목록을 조절하는 구조.
+- 사람이 관리하는 profile은 `e_id` 기준으로 두되, runtime에서는 `active_unit_ids`와 `teaching_target_e_ids`로 나누어 사용하는 구조.
+- detector 출력에서 불연속 문법항목을 안정적으로 다루기 위해 `span_start`, `span_end`보다 `span_segments`를 canonical span 표현으로 쓰는 구조.
+- corpus search의 primary output을 CSV 하나가 아니라 detection JSONL과 사람 검수용 CSV로 나누는 구조.
+- human review CSV와 encoder 후보 JSONL에 `unit_id`, `unit_type`, `member_e_ids`, `group`, `span_segments`, `span_key`, `span_text`, `detect_rule_ids`, `hard_fail_rule_ids`를 포함하는 구조.
+- 새 문법항목이나 새 규칙을 추가할 때 기존 규칙과의 충돌, hit 수 폭증, 같은 span의 다중 unit 후보, 처리 시간 증가를 점검하는 offline `audit_rules.py`.
+- `group=c` polyset runtime에서 member별 verify 규칙을 그대로 합치면 의미 구분용 verify가 잘못된 hard_fail을 만들 수 있으므로, 의미 중립 hard_fail만 적용하거나 polyset 공통 verify 규칙을 따로 두는 방안.
+
+검토 기준:
+
+- 실시간 사용자 발화 detect 경로에서는 응답속도를 우선합니다.
+- 학습용 예문 구축 경로와 HanTalk 실시간 detect 경로가 서로 다른 detector 로직으로 갈라지지 않게 합니다.
+- 다만 Phase 1에서는 과도한 일반화보다 df003 pilot이 실제로 끝까지 도는 것을 우선합니다.
+
 ## `configs/grammar_items.yaml` 초안 schema
 
 ```yaml
