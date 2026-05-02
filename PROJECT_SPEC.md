@@ -287,7 +287,9 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 | `HanTalk_work/corpus/example_making/prepared/example_making_batch_###.jsonl` | 여러 말뭉치에서 stable hash sampling으로 만든 공통 검색 batch | 자동화 | `search_corpus.py` |
 | `HanTalk_arti/example_making/{item_id}_batch_###_detection.jsonl` | DetectorEngine 검색 결과 원본 | 자동화 | 사람 + 검수/분석 CLI |
 | `HanTalk_arti/example_making/{item_id}_batch_###_human_review.csv` | 사람 검수용 후보 표 | 자동화 | 사람 검수 |
-| `labels/df003_human_review.csv` | 사람이 확정한 TP/FP/span | 사람 | dataset export CLI |
+| `HanTalk_arti/example_making/{item_id}_batch_###_human_review_labeled.xlsx` | 사람이 확정한 TP/FP/span 검수 완료본 | 사람 | `summarize_review.py`, dataset export CLI |
+| `HanTalk_arti/example_making/{item_id}_batch_###_human_review_labeled.csv` | 사람이 확정한 TP/FP/span 검수 완료본의 CSV 사본 | 사람 또는 자동 변환 | `summarize_review.py`, dataset export CLI |
+| `HanTalk_arti/example_making/{item_id}_review_summary.json` | labeled review 파일 누적 집계와 목표 달성 여부 | 자동화 | 사람 + 다음 batch 판단 |
 | `datasets/df003_encoder_candidates.jsonl` | 인코더 학습 후보 데이터 | 자동화 | 향후 fine-tuning |
 | `logs/df003_regex_iterations.jsonl` | FN 분석과 수정 이력 | 자동화 | 사람 + Codex |
 
@@ -565,6 +567,51 @@ python3 -m src.search_corpus \
 - human review CSV는 Excel에서 한국어가 깨지지 않도록 `utf-8-sig`로 저장합니다.
 - review CSV는 `span_segments`, `span_key`, `span_text`, `span_source`, `component_span_status`, `applied_bridge_ids`, `detect_rule_ids`를 포함합니다.
 - search report는 domain별 candidate 수, span source count, component span status count, 실행 시간을 기록합니다.
+
+## Labeled review summary
+
+사람 검수가 끝난 파일은 자동 생성 검수표와 구분하기 위해 `_labeled` suffix를 붙입니다.
+
+예:
+
+```text
+/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_human_review_labeled.xlsx
+/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_human_review_labeled.csv
+```
+
+`/Users/yonghyunnam/Downloads/for_codex2` 같은 전달용 폴더는 임시 확인 폴더로만 사용하고, 자동화의 기준 입력으로 삼지 않습니다. 기준 labeled 파일은 `HanTalk_arti/example_making` 아래에 둡니다.
+
+다음 자동화 단계에서는 `src/summarize_review.py`를 만들어 labeled xlsx/csv 파일을 하나 이상 읽고 누적 집계를 생성합니다.
+
+입력:
+
+```text
+--input .../{item_id}_batch_000_human_review_labeled.xlsx
+--input .../{item_id}_batch_001_human_review_labeled.xlsx
+```
+
+출력:
+
+```text
+/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/{item_id}_review_summary.json
+```
+
+`summarize_review.py`의 최소 집계 항목:
+
+- 입력 파일 수와 총 후보 행 수
+- `human_label` 정규화 결과별 count: `tp`, `fp`, `unclear`, invalid/blank
+- `span_status` 정규화 결과별 count
+- `corpus_domain`별 TP/FP count
+- `span_source`별 TP/FP count
+- `component_span_status`별 TP/FP count
+- `positive_100`, `negative_100` 달성 여부
+
+주의:
+
+- `human_label`이 최종 기준입니다. LLM 임시 라벨은 최종 라벨로 쓰지 않습니다.
+- FP 후보의 `span_status=ok`는 허용합니다. 현재 df003 batch_000 labeled 파일은 FP에도 검수자가 span 확인을 완료했다는 뜻으로 `ok`를 넣을 수 있습니다.
+- positive 후보는 기본적으로 `human_label=tp`이고 `span_status=ok`인 행입니다.
+- negative 후보는 기본적으로 `human_label=fp`인 행입니다. negative export 단계에서는 `span_status=ok`, `not_applicable`, 빈값 허용 여부를 별도로 정책화합니다.
 
 ## 향후 detector 설계 검토 메모
 

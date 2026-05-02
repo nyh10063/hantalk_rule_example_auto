@@ -5,7 +5,7 @@
 - Current phase: Phase 1 pilot
 - Current item: df003 `ㄴ/은 적 있/없`
 - Current project goal: 300개 문법항목의 검색용 정규식 및 오탐 필터링 인코더용 positive/negative 예문 구축 자동화
-- Current immediate goal: df003 corpus search 후보 180개를 사람이 TP/FP/span 검수하고, 남은 FP 유형을 분석하기
+- Current immediate goal: df003 batch_000 summary를 기준으로 batch_001 생성 및 검색 루프를 실행하기
 
 ## 현재까지 완료
 
@@ -113,6 +113,9 @@
 - 최신 df003 human review Excel 산출물을 다시 생성함:
   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_human_review.xlsx`
 - 정규식 다듬기 및 예문 제작용 통합 말뭉치 root와 네 입력 파일명을 `PROJECT_SPEC.md`에 명시함
+- `dict.xlsx`의 `detect_rules` 23행 df003 verify rule `r_df003_v01` pattern을 확장함
+  - 이전: `^\s*(?:으로|인|일|에)`
+  - 이후: `^\s*(?:으로|인|일|에|극|금|되|립|었|을|응|정|했|화)`
 
 ## 이번에 테스트한 것
 
@@ -229,13 +232,80 @@
   - hard_failed candidates: 127
 - 최신 `df003_batch_000_human_review.csv` header에 partial 보조 열이 포함됨을 확인함
 - 최신 `df003_batch_000_human_review.xlsx`는 181행(header 포함), 40열로 재생성됨을 확인함
+- df003 verify rule pattern 확장 후 bundle export 결과 `warnings=0`을 확인함
+- df003 verify rule pattern 확장 후 gold test 결과:
+  - `gold_total=50`
+  - `gold_matched=50`
+  - `gold_recall=1.0`
+  - `span_exact_recall=1.0`
+  - `fn_count=0`
+- 확장된 df003 verify rule로 corpus search와 `df003_batch_000_human_review.csv`를 다시 생성함
+- 확장된 df003 verify rule 적용 후 corpus search 결과:
+  - input texts: 10,000
+  - texts with hits: 140
+  - candidates: 145
+  - candidates by domain: `daily_conversation=48`, `news=73`, `non_published=22`, `learner_spoken_5_6=2`
+  - span source counts: `component_spans=63`, `regex_match_fallback=82`
+  - hard_failed candidates: 162
+  - review CSV는 40열 구조로 생성됨
+- df003 batch_000 사람 검수 완료본을 공식 labeled 파일로 확정함:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_human_review_labeled.xlsx`
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_human_review_labeled.csv`
+- `/Users/yonghyunnam/Downloads/for_codex2`는 전달/임시 확인 폴더로만 사용하고, 자동화 기준 입력은 `HanTalk_arti/example_making` 아래 labeled 파일로 둠
+- df003 batch_000 labeled 파일은 사람이 `human_label`에 전 행 `tp/fp`, `span_status`에 전 행 `ok`를 입력한 검수 완료본임
+- batch_000 검수 결과는 현재 `TP 60`, `FP 85`로 보고, 더 이상 안전하게 FP를 줄이기보다 다음 batch 반복 수집으로 넘어감
+- `src/summarize_review.py` 구현 완료
+  - `--item-id`를 필수로 받음
+  - labeled `.xlsx`와 `.csv`를 모두 읽음
+  - header 이름은 `strip()`하여 비교함
+  - 필수 열은 `hit_id`, `human_label`, `span_status`
+  - 빈 `hit_id`와 중복 `hit_id`는 error로 처리함
+  - `human_label`을 `tp`, `fp`, `unclear`, `blank`, `invalid`로 정규화함
+  - `span_status`를 `ok`, `span_wrong`, `not_applicable`, `blank`, `invalid`로 정규화함
+  - `FP + span_status=ok`는 오류로 보지 않음
+  - `corpus_domain`, `span_source`, `component_span_status`별 label count를 집계함
+  - `positive_100`, `negative_100`, `next_action`을 계산함
+- df003 batch_000 labeled xlsx/csv 집계 결과:
+  - n_rows: 145
+  - label_counts: `tp=60`, `fp=85`, `unclear=0`, `blank=0`, `invalid=0`
+  - span_status_counts: `ok=145`, `invalid=0`
+  - by_span_source: `component_spans(tp=60, fp=3)`, `regex_match_fallback(tp=0, fp=82)`
+  - target_reached: `positive_100=false`, `negative_100=false`
+  - next_action: `continue_batch_search`
+  - summary output:
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_review_summary.json`
 
 ## 다음 작업
 
-1. 최신 `df003_batch_000_human_review.xlsx`에서 TP/FP/span 검수를 재개함
-2. 남은 `regex_match_fallback=117` 후보가 어떤 FP 유형인지 확인함
-3. gold recall=1을 유지하는 조건에서 추가 `component_right_context` 또는 component/gap 규칙으로 줄일 수 있는 FP 유형을 찾음
-4. 안전하게 줄일 수 없는 FP는 인코더 negative 후보로 남김
+1. batch_001 검색 전에 detector bundle을 다시 export하고 df003 gold test를 실행함
+   - `python3 -m src.detector.export_bundle --dict datasets/dict/dict.xlsx --out configs/detector/detector_bundle.json`
+   - `python3 src/test_gold.py --item-id df003 --bundle configs/detector/detector_bundle.json --active-unit-id df003 --fail-on-fn`
+   - 통과 기준:
+     - `gold_recall=1.0`
+     - `span_exact_recall=1.0`
+     - `fn_count=0`
+2. batch_index=1 prepared corpus를 생성함
+   - 입력 root:
+     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making`
+   - 명령 형태:
+     - `python3 -m src.prepare_example_corpus --manifest configs/corpus/example_making_manifest.json --corpus-root ... --batch-index 1 --out .../example_making_batch_001.jsonl --report .../example_making_batch_001_report.json`
+   - 출력:
+     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_001.jsonl`
+     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_001_report.json`
+3. 확정된 df003 detector bundle로 batch_001을 검색함
+   - 명령 형태:
+     - `python3 -m src.search_corpus --bundle configs/detector/detector_bundle.json --input-jsonl .../example_making_batch_001.jsonl --active-unit-id df003 --out-jsonl .../df003_batch_001_detection.jsonl --review-csv .../df003_batch_001_human_review.csv --report-json .../df003_batch_001_search_report.json`
+   - 출력:
+     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_001_detection.jsonl`
+     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_001_human_review.csv`
+     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_001_search_report.json`
+4. 사람이 batch_001 검수 후 아래 이름으로 labeled 파일을 저장함
+   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_001_human_review_labeled.xlsx`
+   - 필요 시 CSV 사본:
+     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_001_human_review_labeled.csv`
+5. batch_000 + batch_001을 `summarize_review.py`로 함께 집계함
+   - `positive_100=true`, `negative_100=true`이면 df003 예문 수집을 멈추고 encoder 후보 export 단계로 넘어감
+   - 부족하면 batch_002부터 같은 루프를 반복함
 
 ## 주의사항
 
