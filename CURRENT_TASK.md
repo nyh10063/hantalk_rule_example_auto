@@ -58,6 +58,10 @@
 - `src/test_gold.py` bundle 평가 report에 candidate-level `span_source_counts`를 추가함
 - `dict.xlsx`의 `rule_components` 시트에서 중복된 `bridge_id` 헤더를 정리하고, `comp_id` 옆의 `bridge_id` 열 하나만 남김
 - Kiwi는 기본 detector 경로에서 제외하고, 문자 기반 bridge로 해결하기 어려운 항목에서만 예외적으로 검토하기로 문서화함
+- 일상대화말뭉치 2024년/2023년 JSON에서 `form`과 출처를 추출해 통합 작업 파일을 생성함:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/casual_dial/casual_dialogue_2023_2024_form_source.txt`
+- 신문말뭉치 2024년 JSON에서 `form`을 추출하고 HTML 태그를 제거해 통합 작업 파일을 생성함:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/news_paper(2024)/news_paper_2024_form_source.txt`
 
 ## 이번에 테스트한 것
 
@@ -91,6 +95,15 @@
 - 직접 detect summary에서 `n_component_span_success=1`, `n_component_span_fallback=0`, `n_component_span_regex_only=0` 출력 확인
 - `git diff --check` 통과
 - `PROJECT_SPEC.md`와 `DECISIONS.md`에 Kiwi 기본 제외 및 예외 검토 원칙을 기록함
+- 일상대화말뭉치 통합 파일 생성 결과를 확인함:
+  - 2024년: 728,257행
+  - 2023년: 677,262행
+  - 합계: 1,405,519행, 헤더 포함 전체 1,405,520줄
+  - 형식: `form;source`
+- 신문말뭉치 2024년 통합 파일 생성 결과를 확인함:
+  - 총 5,390,096행, 헤더 포함 전체 5,390,097줄
+  - 형식: `form;source`
+  - `form` 안의 HTML 태그는 제거함
 
 ## 다음 작업
 
@@ -115,7 +128,7 @@
 
 - 사용할 일반 말뭉치 위치와 형식이 아직 확정되지 않았습니다.
 - df003 span 기준은 기존 df003 gold span을 변환해 사용했지만, 최종 교육적 span 정책은 사람이 확인해야 합니다.
-- 뉴스 말뭉치와 일상 대화 말뭉치의 실제 파일 경로, 행 단위 형식, batch offset 관리 방식이 아직 확정되지 않았습니다.
+- 일상 대화 말뭉치와 신문 말뭉치는 `form;source` 형식의 통합 파일을 만들었지만, 전체 corpus search batch offset 관리 방식은 아직 확정되지 않았습니다.
 - 기본 detector 경로는 Kiwi 없이 진행합니다. 다만 문자 기반 bridge로 해결하기 어려운 항목이 나오면 Kiwi 상업 라이선스/속도/정확도 및 다른 형태소 분석기 후보를 비교해야 합니다.
 - 예외적으로 형태소 분석을 쓰게 될 경우 문장 단위 형태소 분석 cache를 전체 300개 규칙에 공유할지, 난이도/목표 항목에 따라 필요한 규칙에만 공유할지는 HanTalk 본 시스템 설계 단계에서 다시 결정해야 합니다.
 - `PROJECT_SPEC.md`의 `향후 detector 설계 검토 메모`는 SSOT가 아니라 비-SSOT 검토 목록입니다. 구현 전 다시 검토해야 합니다.
