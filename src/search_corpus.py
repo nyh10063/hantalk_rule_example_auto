@@ -46,6 +46,8 @@ REVIEW_COLUMNS = [
     "applied_bridge_ids",
     "detect_rule_ids",
     "hard_fail_rule_ids",
+    "llm_temp_label",
+    "llm_note",
     "human_label",
     "span_status",
     "corrected_span_segments",
@@ -119,6 +121,8 @@ def _review_row(
         "applied_bridge_ids": _json_cell(candidate.get("applied_bridge_ids") or []),
         "detect_rule_ids": _json_cell(candidate.get("detect_rule_ids") or []),
         "hard_fail_rule_ids": _json_cell(candidate.get("hard_fail_rule_ids") or []),
+        "llm_temp_label": "",
+        "llm_note": "",
         "human_label": "",
         "span_status": "",
         "corrected_span_segments": "",
@@ -160,7 +164,7 @@ def search_corpus(
     text_hit_by_domain: Counter[str] = Counter()
     detector_summary_totals: Counter[str] = Counter()
 
-    with out_jsonl.open("w", encoding="utf-8") as jsonl_f, review_csv.open("w", encoding="utf-8", newline="") as csv_f:
+    with out_jsonl.open("w", encoding="utf-8") as jsonl_f, review_csv.open("w", encoding="utf-8-sig", newline="") as csv_f:
         writer = csv.DictWriter(csv_f, fieldnames=REVIEW_COLUMNS)
         writer.writeheader()
 

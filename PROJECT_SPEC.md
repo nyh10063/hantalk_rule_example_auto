@@ -535,6 +535,8 @@ python3 -m src.search_corpus \
 - `--active-unit-id`는 여러 번 줄 수 있습니다. Phase 1 실행은 우선 `df003` 하나로 합니다.
 - detection JSONL은 hit가 있는 문장만 저장합니다.
 - human review CSV는 candidate 하나를 한 행으로 펼쳐 사람이 `human_label`, `span_status`, `corrected_span_segments`, `memo`, `reviewer`를 채울 수 있게 합니다.
+- LLM 검수 보조를 붙일 가능성에 대비해 `llm_temp_label`, `llm_note` 열을 비워 둡니다. 이 값은 최종 라벨이 아니라 임시 참고용입니다.
+- human review CSV는 Excel에서 한국어가 깨지지 않도록 `utf-8-sig`로 저장합니다.
 - review CSV는 `span_segments`, `span_key`, `span_text`, `span_source`, `component_span_status`, `applied_bridge_ids`, `detect_rule_ids`를 포함합니다.
 - search report는 domain별 candidate 수, span source count, component span status count, 실행 시간을 기록합니다.
 

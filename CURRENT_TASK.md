@@ -80,6 +80,8 @@
   - prepared corpus JSONL을 읽고 DetectorEngine으로만 검색함
   - detection JSONL, 사람 검수용 CSV, search report JSON을 생성함
   - 여러 `--active-unit-id`를 받을 수 있게 구현함
+  - 사람 검수용 CSV에 `llm_temp_label`, `llm_note` 빈 열을 추가함
+  - 사람 검수용 CSV를 Excel 호환성을 위해 `utf-8-sig`로 저장하도록 수정함
 - 예문 구축용 batch 비율을 일상대화 5,000행, 뉴스 2,000행, 비출판물 2,000행, 학습자 말뭉치 1,000행으로 적용함
 - 공통 prepared corpus batch 생성 완료:
   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_000.jsonl`
@@ -165,6 +167,7 @@
   - span source counts: `component_spans=119`, `regex_match_fallback=188`
   - elapsed: 약 0.13초
 - `df003_batch_000_human_review.csv`에 307개 후보 행이 생성되고, 사람이 채울 `human_label`, `span_status`, `memo`, `reviewer` 열이 포함됨을 확인함
+- `/private/tmp/hantalk_sample_20_review.csv` 샘플 실행으로 review CSV가 UTF-8 BOM(`b'\xef\xbb\xbf'`)을 포함하고, `llm_temp_label`, `llm_note` header가 들어감을 확인함
 
 ## 다음 작업
 
