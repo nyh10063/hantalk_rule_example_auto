@@ -599,6 +599,7 @@ python3 -m src.search_corpus \
 `summarize_review.py`의 최소 집계 항목:
 
 - 입력 파일 수와 총 후보 행 수
+- `--item-id`와 row의 `origin_e_id` 또는 `unit_id` 일치 검증
 - `human_label` 정규화 결과별 count: `tp`, `fp`, `unclear`, invalid/blank
 - `span_status` 정규화 결과별 count
 - `corpus_domain`별 TP/FP count
@@ -609,6 +610,8 @@ python3 -m src.search_corpus \
 주의:
 
 - `human_label`이 최종 기준입니다. LLM 임시 라벨은 최종 라벨로 쓰지 않습니다.
+- `origin_e_id` 또는 `unit_id`가 `--item-id`와 모두 다르면 잘못된 labeled 파일을 넣은 것으로 보고 error 처리합니다.
+- `origin_e_id`와 `unit_id`가 둘 다 없으면 item 일치 검증을 건너뛰되 summary warning으로 남깁니다.
 - FP 후보의 `span_status=ok`는 허용합니다. 현재 df003 batch_000 labeled 파일은 FP에도 검수자가 span 확인을 완료했다는 뜻으로 `ok`를 넣을 수 있습니다.
 - positive 후보는 기본적으로 `human_label=tp`이고 `span_status=ok`인 행입니다.
 - negative 후보는 기본적으로 `human_label=fp`인 행입니다. negative export 단계에서는 `span_status=ok`, `not_applicable`, 빈값 허용 여부를 별도로 정책화합니다.

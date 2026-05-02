@@ -99,6 +99,16 @@ def _group_counts_to_dict(group_counts: dict[str, Counter[str]]) -> dict[str, di
     }
 
 
+def _item_reference(row: dict[str, str]) -> tuple[str | None, str | None, str | None]:
+    origin_e_id = str(row.get("origin_e_id") or "").strip()
+    unit_id = str(row.get("unit_id") or "").strip()
+    if origin_e_id:
+        return "origin_e_id", origin_e_id, unit_id
+    if unit_id:
+        return "unit_id", unit_id, unit_id
+    return None, None, None
+
+
 def _read_csv(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
@@ -184,6 +194,7 @@ def summarize_reviews(
         raise ValueError("--item-id must not be blank")
     if not input_paths:
         raise ValueError("At least one --input is required")
+    expected_item_id = item_id.strip()
 
     label_counts: Counter[str] = Counter()
     span_status_counts: Counter[str] = Counter()
@@ -193,8 +204,11 @@ def summarize_reviews(
     input_summaries: list[dict[str, Any]] = []
     invalid_rows: list[dict[str, Any]] = []
     cleanup_flags: list[str] = []
+    warnings: list[str] = []
     seen_hit_ids: dict[str, str] = {}
     duplicate_hit_ids: list[dict[str, str]] = []
+    item_mismatch_rows: list[dict[str, Any]] = []
+    missing_item_reference_rows: list[dict[str, Any]] = []
     n_rows = 0
     n_tp_blank_span_status = 0
 
@@ -216,6 +230,29 @@ def summarize_reviews(
                 )
                 continue
             seen_hit_ids[hit_id] = str(input_path)
+
+            item_ref_column, item_ref_value, unit_id_value = _item_reference(row)
+            if item_ref_value is None:
+                missing_item_reference_rows.append(
+                    {
+                        "input_file": str(input_path),
+                        "row_index": row_index,
+                        "hit_id": hit_id,
+                    }
+                )
+            elif item_ref_value != expected_item_id and unit_id_value != expected_item_id:
+                item_mismatch_rows.append(
+                    {
+                        "input_file": str(input_path),
+                        "row_index": row_index,
+                        "hit_id": hit_id,
+                        "item_id": expected_item_id,
+                        "checked_column": item_ref_column,
+                        "checked_value": item_ref_value,
+                        "origin_e_id": str(row.get("origin_e_id") or "").strip(),
+                        "unit_id": str(row.get("unit_id") or "").strip(),
+                    }
+                )
 
             label = _normalize_label(row.get("human_label"))
             span_status = _normalize_span_status(row.get("span_status"))
@@ -257,6 +294,11 @@ def summarize_reviews(
     if duplicate_hit_ids:
         examples = duplicate_hit_ids[:10]
         raise ValueError(f"Duplicate hit_id found under duplicate_policy=error: {examples}")
+    if item_mismatch_rows:
+        examples = item_mismatch_rows[:10]
+        raise ValueError(f"Review file item_id mismatch for --item-id={expected_item_id}: {examples}")
+    if missing_item_reference_rows:
+        warnings.append("item_reference_missing")
 
     normalized_label_counts = _counter_to_counts(label_counts, LABEL_KEYS)
     normalized_span_status_counts = _counter_to_counts(span_status_counts, SPAN_STATUS_KEYS)
@@ -281,12 +323,20 @@ def summarize_reviews(
 
     summary = {
         "schema_version": "hantalk_review_summary_v1",
-        "item_id": item_id.strip(),
+        "item_id": expected_item_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "input_files": [str(path) for path in input_paths],
         "n_files": len(input_paths),
         "n_rows": n_rows,
         "duplicate_policy": "error",
+        "item_id_validation": {
+            "policy": "error_on_mismatch_warn_on_missing_reference",
+            "expected_item_id": expected_item_id,
+            "checked_columns": ["origin_e_id", "unit_id"],
+            "n_missing_item_reference_rows": len(missing_item_reference_rows),
+            "missing_item_reference_rows": missing_item_reference_rows[:100],
+            "n_missing_item_reference_rows_listed": min(len(missing_item_reference_rows), 100),
+        },
         "label_counts": normalized_label_counts,
         "span_status_counts": normalized_span_status_counts,
         "by_domain": _group_counts_to_dict(by_domain),
@@ -295,8 +345,10 @@ def summarize_reviews(
         "target_reached": target_reached,
         "next_action": next_action,
         "cleanup_flags": cleanup_flags,
+        "warnings": warnings,
         "invalid_rows": invalid_rows[:100],
-        "n_invalid_rows_reported": len(invalid_rows),
+        "n_invalid_rows_total": len(invalid_rows),
+        "n_invalid_rows_listed": min(len(invalid_rows), 100),
         "duplicate_hit_ids": [],
         "input_summaries": input_summaries,
     }

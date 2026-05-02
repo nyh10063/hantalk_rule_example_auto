@@ -260,11 +260,14 @@
   - header 이름은 `strip()`하여 비교함
   - 필수 열은 `hit_id`, `human_label`, `span_status`
   - 빈 `hit_id`와 중복 `hit_id`는 error로 처리함
+  - row의 `origin_e_id` 또는 `unit_id`가 `--item-id`와 모두 다르면 잘못된 labeled 파일로 보고 error 처리함
+  - `origin_e_id`와 `unit_id`가 모두 없으면 item 검증을 건너뛰되 warning으로 남김
   - `human_label`을 `tp`, `fp`, `unclear`, `blank`, `invalid`로 정규화함
   - `span_status`를 `ok`, `span_wrong`, `not_applicable`, `blank`, `invalid`로 정규화함
   - `FP + span_status=ok`는 오류로 보지 않음
   - `corpus_domain`, `span_source`, `component_span_status`별 label count를 집계함
   - `positive_100`, `negative_100`, `next_action`을 계산함
+  - invalid row count는 `n_invalid_rows_total`, `n_invalid_rows_listed`로 구분하여 기록함
 - df003 batch_000 labeled xlsx/csv 집계 결과:
   - n_rows: 145
   - label_counts: `tp=60`, `fp=85`, `unclear=0`, `blank=0`, `invalid=0`
@@ -272,8 +275,15 @@
   - by_span_source: `component_spans(tp=60, fp=3)`, `regex_match_fallback(tp=0, fp=82)`
   - target_reached: `positive_100=false`, `negative_100=false`
   - next_action: `continue_batch_search`
+  - item_id_validation: `n_missing_item_reference_rows=0`
+  - warnings: `[]`
+  - invalid row counts: `n_invalid_rows_total=0`, `n_invalid_rows_listed=0`
   - summary output:
     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_review_summary.json`
+- CSV 사본 입력도 같은 결과로 집계됨을 확인함:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_human_review_labeled.csv`
+- 같은 batch의 xlsx와 csv를 동시에 `--input`으로 넣으면 중복 `hit_id` error가 발생함을 확인함
+- `--item-id xx999`처럼 파일 내용과 다른 item ID를 넣으면 item mismatch error가 발생함을 확인함
 
 ## 다음 작업
 
