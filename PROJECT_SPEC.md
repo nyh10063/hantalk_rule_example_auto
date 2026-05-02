@@ -205,11 +205,11 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 
 절차:
 
-1. 검색용 정규식으로 뉴스 말뭉치와 일상 대화 말뭉치를 각각 5,000행 단위 batch로 검색하여 hit 후보를 수집합니다.
+1. 검색용 정규식으로 공통 prepared corpus batch를 검색하여 hit 후보를 수집합니다. 현재 예문 구축 batch는 일상대화 5,000행, 뉴스 2,000행, 비출판물 2,000행, 학습자 말뭉치 1,000행으로 구성합니다.
 2. hit 후보를 사람이 TP/FP로 검수합니다. LLM은 임시 판단과 이유를 제공할 수 있지만 최종 라벨이 아닙니다.
 3. 검수된 FP 유형을 근거로, gold recall=1을 유지하는 조건에서 정규식을 수정하여 FP를 줄입니다.
 4. 더 이상 안전하게 FP를 줄이기 어렵다고 판단되면 해당 정규식을 검색용 정규식 후보로 확정합니다.
-5. 확정된 검색용 정규식으로 다음 5,000행 batch를 추가 검색합니다.
+5. 확정된 검색용 정규식으로 다음 prepared corpus batch를 추가 검색합니다.
 6. 사람이 TP/FP/span을 검수하여 positive/negative 예문을 각각 100개 모을 때까지 반복합니다.
 
 원칙:
@@ -259,6 +259,8 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 ├── configs/
 │   └── detector/
 │       └── detector_bundle.json
+│   └── corpus/
+│       └── example_making_manifest.json
 ├── exported_gold/
 ├── regex/
 ├── hits/
@@ -278,11 +280,13 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 | --- | --- | --- | --- |
 | `configs/grammar_items.yaml` | 초기 pilot 보조 config. 장기 SSOT는 아님 | 사람 + Codex | 필요 시 참고 |
 | `configs/detector/detector_bundle.json` | `dict.xlsx`에서 생성한 runtime detector bundle | 자동화 | DetectorEngine |
+| `configs/corpus/example_making_manifest.json` | 예문 구축용 공통 말뭉치 batch 구성과 sampling 크기 | 사람 + Codex | `prepare_example_corpus.py` |
 | `datasets/gold/gold.xlsx` | 정규식 gold 50개 원본 관리 파일 | 사람 | gold export/validation CLI |
 | `exported_gold/df003_gold_50.jsonl` | `gold.xlsx`에서 자동 생성한 item별 정규식 gold positive 50개 | 자동화 | gold test CLI |
 | `regex/df003_versions.jsonl` | 정규식 버전과 성능 로그 | 자동화 | regex iteration/report CLI |
-| `hits/{item_id}_{corpus}_batch###_detection.jsonl` | DetectorEngine 검색 결과 원본 | 자동화 | 검수표 export CLI |
-| `hits/{item_id}_{corpus}_batch###_review.csv` | 사람 검수용 후보 표 | 자동화 | 사람 검수 |
+| `HanTalk_work/corpus/example_making/prepared/example_making_batch_###.jsonl` | 여러 말뭉치에서 stable hash sampling으로 만든 공통 검색 batch | 자동화 | `search_corpus.py` |
+| `HanTalk_arti/example_making/{item_id}_batch_###_detection.jsonl` | DetectorEngine 검색 결과 원본 | 자동화 | 사람 + 검수/분석 CLI |
+| `HanTalk_arti/example_making/{item_id}_batch_###_human_review.csv` | 사람 검수용 후보 표 | 자동화 | 사람 검수 |
 | `labels/df003_human_review.csv` | 사람이 확정한 TP/FP/span | 사람 | dataset export CLI |
 | `datasets/df003_encoder_candidates.jsonl` | 인코더 학습 후보 데이터 | 자동화 | 향후 fine-tuning |
 | `logs/df003_regex_iterations.jsonl` | FN 분석과 수정 이력 | 자동화 | 사람 + Codex |
@@ -462,6 +466,77 @@ span_end
 - 같은 `ruleset_id` 안에 detect/verify stage가 섞이면 fatal error입니다.
 - Excel header row 중간에 빈 header가 있으면 값과 header가 어긋날 수 있으므로 fatal error입니다.
 - pattern이 `r"..."` 같은 Python literal처럼 보이는 경우, group=c인데 polyset_id가 없는 경우, verify rule인데 hard_fail=false인 경우는 warning입니다.
+
+## 예문 구축용 prepared corpus batch
+
+예문 구축용 말뭉치 batch는 item별로 따로 만들지 않고 공통 prepared corpus로 만듭니다. 같은 batch를 여러 문법항목에 반복 적용해야 300개 문법항목의 hit 수, FP 유형, span 품질을 같은 입력 집합 위에서 비교할 수 있습니다.
+
+현재 manifest 파일:
+
+```text
+configs/corpus/example_making_manifest.json
+```
+
+현재 batch 구성:
+
+| corpus_domain | sample size |
+| --- | ---: |
+| `daily_conversation` | 5,000 |
+| `news` | 2,000 |
+| `non_published` | 2,000 |
+| `learner_spoken_5_6` | 1,000 |
+
+원칙:
+
+- manifest에는 절대경로를 넣지 않습니다.
+- 실제 말뭉치 폴더는 CLI의 `--corpus-root`로 전달합니다.
+- 입력 통합 파일은 `text;source` 계열 형식으로 읽습니다. header가 있으면 `sentence`, `form`, `text`, `raw_text`를 text column 후보로, `source`를 source column 후보로 봅니다.
+- header가 예상과 다르면 첫 번째 열을 text, 마지막 열을 source로 해석합니다.
+- 데이터 line은 문장 안의 세미콜론을 보호하기 위해 마지막 delimiter 기준으로 `rsplit(delimiter, 1)` 방식으로 분리합니다.
+- 대용량 말뭉치를 메모리에 모두 올리지 않고, stable hash streaming sampling으로 domain별 batch를 구성합니다.
+- 같은 `seed`, `batch_index`, 입력 파일이면 prepared JSONL은 재현 가능해야 합니다.
+- `batch_index=k`는 domain별 hash 순서에서 `kN`부터 `(k+1)N` 구간을 선택합니다.
+
+생성 명령 예:
+
+```bash
+python3 -m src.prepare_example_corpus \
+  --manifest configs/corpus/example_making_manifest.json \
+  --corpus-root /Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making \
+  --batch-index 0 \
+  --out /Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_000.jsonl \
+  --report /Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_000_report.json
+```
+
+prepared JSONL 한 줄은 아래 필드를 포함합니다.
+
+```json
+{"text_id":"daily_conversation_b000_000001","batch_id":"example_making_batch_000","batch_index":0,"corpus_domain":"daily_conversation","source":"일상대화말뭉치(2024년)","source_file":"일상대화말뭉치(2023_2024).txt","source_row_index":0,"source_line_no":2,"sample_hash":"...","raw_text":"..."}
+```
+
+## Corpus search output
+
+`src/search_corpus.py`는 prepared corpus JSONL을 읽고, 정규식을 직접 실행하지 않고 반드시 `DetectorEngine`을 호출합니다.
+
+실행 예:
+
+```bash
+python3 -m src.search_corpus \
+  --bundle configs/detector/detector_bundle.json \
+  --input-jsonl /Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_000.jsonl \
+  --active-unit-id df003 \
+  --out-jsonl /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_detection.jsonl \
+  --review-csv /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_human_review.csv \
+  --report-json /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_search_report.json
+```
+
+원칙:
+
+- `--active-unit-id`는 여러 번 줄 수 있습니다. Phase 1 실행은 우선 `df003` 하나로 합니다.
+- detection JSONL은 hit가 있는 문장만 저장합니다.
+- human review CSV는 candidate 하나를 한 행으로 펼쳐 사람이 `human_label`, `span_status`, `corrected_span_segments`, `memo`, `reviewer`를 채울 수 있게 합니다.
+- review CSV는 `span_segments`, `span_key`, `span_text`, `span_source`, `component_span_status`, `applied_bridge_ids`, `detect_rule_ids`를 포함합니다.
+- search report는 domain별 candidate 수, span source count, component span status count, 실행 시간을 기록합니다.
 
 ## 향후 detector 설계 검토 메모
 

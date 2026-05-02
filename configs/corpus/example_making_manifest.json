@@ -1,0 +1,26 @@
+{
+  "batch_id_prefix": "example_making",
+  "seed": 20260502,
+  "delimiter": ";",
+  "encoding": "utf-8-sig",
+  "sampling": {
+    "daily_conversation": 5000,
+    "news": 2000,
+    "non_published": 2000,
+    "learner_spoken_5_6": 1000
+  },
+  "corpora": {
+    "daily_conversation": {
+      "file": "일상대화말뭉치(2023_2024).txt"
+    },
+    "news": {
+      "file": "신문말뭉치(2024).txt"
+    },
+    "non_published": {
+      "file": "비출판물말뭉치.txt"
+    },
+    "learner_spoken_5_6": {
+      "file": "학습자말뭉치(구어_5_6급).txt"
+    }
+  }
+}

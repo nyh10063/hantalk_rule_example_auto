@@ -174,3 +174,11 @@ Reason: df003 `ㄴ/은 적 있/없` pilot에서 문자 기반 `adnominal_n` brid
 ### Decision: component order는 `fx` 고정 순서를 기본으로 하고, `fl`은 인접 교환만 허용한다.
 
 Reason: component span 조립에서 모든 순열을 허용하면 300개 문법항목 확장 단계에서 path 수가 폭증하고 응답속도가 흔들릴 수 있다. 따라서 `comp_order`를 기본 순서로 사용하고, `order_policy=fx`는 순서를 반드시 고정한다. `order_policy=fl`은 인접한 `fl` component끼리만 제한적으로 순서 뒤바뀜을 허용한다. anchor component는 `anchor_rank`가 가장 큰 component로 보고 항상 기본 위치에 고정한다.
+
+### Decision: 예문 구축용 말뭉치는 공통 prepared corpus batch로 만든다.
+
+Reason: 300개 문법항목을 item별로 서로 다른 말뭉치 batch에서 검색하면 hit 수와 FP 유형을 비교하기 어렵다. 따라서 일상대화, 뉴스, 비출판물, 학습자 말뭉치를 정해진 비율로 sampling한 공통 prepared corpus JSONL을 만들고, 각 문법항목의 `DetectorEngine` 검색은 이 공통 batch 위에서 실행한다. 현재 Phase 1 batch 비율은 일상대화 5,000행, 뉴스 2,000행, 비출판물 2,000행, 학습자 말뭉치 1,000행이다.
+
+### Decision: prepared corpus sampling은 stable hash streaming 방식으로 한다.
+
+Reason: 신문 말뭉치처럼 수백만 행 규모의 입력 파일을 전체 메모리에 올려 shuffle하는 방식은 장기적으로 불안정하다. 따라서 각 행에 대해 seed, domain, source file, source line number, raw text 기반 SHA-256 hash를 계산하고, domain별로 필요한 hash 구간만 streaming으로 유지한다. 같은 seed와 batch_index를 사용하면 같은 prepared JSONL이 재생성되어야 하며, `batch_index`를 바꾸면 다음 hash 구간의 batch를 만들 수 있다.

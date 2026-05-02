@@ -5,7 +5,7 @@
 - Current phase: Phase 1 pilot
 - Current item: df003 `ㄴ/은 적 있/없`
 - Current project goal: 300개 문법항목의 검색용 정규식 및 오탐 필터링 인코더용 positive/negative 예문 구축 자동화
-- Current immediate goal: df003 component span 조립이 붙은 DetectorEngine 결과를 뉴스/일상 대화 말뭉치 각 5,000행 batch에 적용하는 corpus search CLI 준비
+- Current immediate goal: df003 component span 조립이 붙은 DetectorEngine 결과를 공통 prepared corpus batch에 적용하고, 사람이 TP/FP/span을 검수할 CSV를 생성하기
 
 ## 현재까지 완료
 
@@ -62,6 +62,32 @@
   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/casual_dial/casual_dialogue_2023_2024_form_source.txt`
 - 신문말뭉치 2024년 JSON에서 `form`을 추출하고 HTML 태그를 제거해 통합 작업 파일을 생성함:
   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/news_paper(2024)/news_paper_2024_form_source.txt`
+- 비출판물말뭉치 SJML에서 `<text ...>`와 `</text>` 사이의 텍스트를 추출하고 문장 단위로 분리해 통합 작업 파일을 생성함:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/비출판물말뭉치/non_published_sentence_source.txt`
+- 학습자말뭉치(구어 5~6급) 텍스트 파일의 각 문장에 출처를 붙여 통합 작업 파일을 생성함:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/learner_spoken_5_6_sentence_source.txt`
+- 50개 정규식 gold 예문 후보 제작용 신문말뭉치 2022년 JSON에서 `form`을 추출하고 HTML 태그를 제거해 통합 작업 파일을 생성함:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/50sample_making/신문말뭉치(2022)/news_paper_2022_form_source.txt`
+- 50개 정규식 gold 예문 후보 제작용 일상대화말뭉치 2022년 JSON에서 `form`을 추출해 통합 작업 파일을 생성함:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/50sample_making/일상대화말뭉치(2022)/casual_dialogue_2022_form_source.txt`
+- `configs/corpus/example_making_manifest.json` 생성 완료
+- `src/prepare_example_corpus.py` 구현 완료
+  - 말뭉치 통합 파일을 `text;source` 계열로 읽음
+  - header text 후보(`sentence`, `form`, `text`, `raw_text`)와 source 후보(`source`)를 우선 사용함
+  - 데이터 line은 마지막 delimiter 기준 `rsplit(";", 1)`로 분리함
+  - stable hash streaming sampling으로 공통 prepared corpus batch를 생성함
+- `src/search_corpus.py` 구현 완료
+  - prepared corpus JSONL을 읽고 DetectorEngine으로만 검색함
+  - detection JSONL, 사람 검수용 CSV, search report JSON을 생성함
+  - 여러 `--active-unit-id`를 받을 수 있게 구현함
+- 예문 구축용 batch 비율을 일상대화 5,000행, 뉴스 2,000행, 비출판물 2,000행, 학습자 말뭉치 1,000행으로 적용함
+- 공통 prepared corpus batch 생성 완료:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_000.jsonl`
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_000_report.json`
+- df003 corpus search 산출물 생성 완료:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_detection.jsonl`
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_human_review.csv`
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_search_report.json`
 
 ## 이번에 테스트한 것
 
@@ -104,13 +130,48 @@
   - 총 5,390,096행, 헤더 포함 전체 5,390,097줄
   - 형식: `form;source`
   - `form` 안의 HTML 태그는 제거함
+- 비출판물말뭉치 통합 파일 생성 결과를 확인함:
+  - SJML 파일 10,753개 처리
+  - 총 238,855행, 헤더 포함 전체 238,856줄
+  - 형식: `sentence;source`
+  - `<text ...>` 내부 텍스트를 대상으로 하고 SGML/HTML 태그는 제거함
+- 학습자말뭉치(구어 5~6급) 통합 파일 생성 결과를 확인함:
+  - 총 81,906행, 헤더 포함 전체 81,907줄
+  - 형식: `sentence;source`
+- 50개 정규식 gold 예문 후보 제작용 신문말뭉치 2022년 통합 파일 생성 결과를 확인함:
+  - JSON 파일 9개 처리
+  - 총 2,366,197행, 헤더 포함 전체 2,366,198줄
+  - 형식: `form;source`
+  - `form` 안의 HTML 태그는 제거함
+- 50개 정규식 gold 예문 후보 제작용 일상대화말뭉치 2022년 통합 파일 생성 결과를 확인함:
+  - JSON 파일 2,654개 처리
+  - 총 866,359행, 헤더 포함 전체 866,360줄
+  - 형식: `form;source`
+- `python3 -m py_compile src/prepare_example_corpus.py src/search_corpus.py` 통과
+- prepared corpus batch 생성 결과:
+  - 총 10,000행
+  - `daily_conversation=5000`
+  - `news=2000`
+  - `non_published=2000`
+  - `learner_spoken_5_6=1000`
+  - parse error 0
+- 같은 seed와 batch_index로 `/private/tmp/example_making_batch_000_check.jsonl`을 다시 생성했을 때 SHA-256이 동일함을 확인함:
+  - `35e459fd5697fb370f83f5afd7fae7985df29063682b72f6dd3f9fbfa9778afd`
+- df003 corpus search 결과:
+  - input texts: 10,000
+  - texts with hits: 291
+  - candidates: 307
+  - candidates by domain: `daily_conversation=64`, `news=192`, `non_published=47`, `learner_spoken_5_6=4`
+  - span source counts: `component_spans=119`, `regex_match_fallback=188`
+  - elapsed: 약 0.13초
+- `df003_batch_000_human_review.csv`에 307개 후보 행이 생성되고, 사람이 채울 `human_label`, `span_status`, `memo`, `reviewer` 열이 포함됨을 확인함
 
 ## 다음 작업
 
-1. df003 bundle 기반 DetectorEngine을 뉴스/일상 대화 말뭉치 각 5,000행 batch에 적용하는 corpus search CLI 구현
-2. detection JSONL과 사람 검수용 CSV 형식 재검토
-3. `component_spans`와 `regex_match_fallback` 후보가 검수표에서 구분되도록 표시
-4. corpus search에서 component fallback 후보가 실제 FP 수집에 어떤 영향을 주는지 확인
+1. `df003_batch_000_human_review.csv`에서 사람이 TP/FP/span 검수를 시작함
+2. 특히 `regex_match_fallback=188` 후보가 어떤 FP 유형인지 확인함
+3. 검수 결과를 바탕으로 gold recall=1을 유지하면서 df003 detect rule 또는 component rule을 좁힐 수 있는지 판단함
+4. 필요한 경우 df003 verify hard_fail rule 후보를 설계함
 
 ## 주의사항
 
@@ -122,13 +183,12 @@
 - 말뭉치 FP를 줄이기 위해 정규식을 수정하더라도 gold recall=1이 깨지면 검색용 정규식으로 확정하지 않습니다.
 - 브릿지는 무조건 채택하지 않고, 넓은 정규식으로 gold recall=1을 확보한 뒤 후보 버전 또는 `bridge_id` 버전을 만들어 비교합니다.
 - 브릿지 후보는 gold recall=1 유지와 5,000행 말뭉치 FP 감소량을 확인한 뒤, FP 감소 효과가 있거나 span 경계가 좋아질 때만 채택합니다. df003의 `adnominal_n`은 현재 채택되어 있습니다.
-- 뉴스/일상 대화 말뭉치는 우선 각각 5,000행 단위 batch로 검색합니다.
+- 일반 말뭉치 검색은 공통 prepared corpus batch를 사용합니다. 현재 batch 비율은 일상대화 5,000행, 뉴스 2,000행, 비출판물 2,000행, 학습자 말뭉치 1,000행입니다.
 
 ## 미해결 문제
 
-- 사용할 일반 말뭉치 위치와 형식이 아직 확정되지 않았습니다.
 - df003 span 기준은 기존 df003 gold span을 변환해 사용했지만, 최종 교육적 span 정책은 사람이 확인해야 합니다.
-- 일상 대화 말뭉치와 신문 말뭉치는 `form;source` 형식의 통합 파일을 만들었지만, 전체 corpus search batch offset 관리 방식은 아직 확정되지 않았습니다.
+- 공통 prepared corpus batch는 stable hash 기반으로 구현했지만, 이후 batch_index를 늘릴 때 domain별 중복 없음과 검수량 운영 방식은 계속 확인해야 합니다.
 - 기본 detector 경로는 Kiwi 없이 진행합니다. 다만 문자 기반 bridge로 해결하기 어려운 항목이 나오면 Kiwi 상업 라이선스/속도/정확도 및 다른 형태소 분석기 후보를 비교해야 합니다.
 - 예외적으로 형태소 분석을 쓰게 될 경우 문장 단위 형태소 분석 cache를 전체 300개 규칙에 공유할지, 난이도/목표 항목에 따라 필요한 규칙에만 공유할지는 HanTalk 본 시스템 설계 단계에서 다시 결정해야 합니다.
 - `PROJECT_SPEC.md`의 `향후 detector 설계 검토 메모`는 SSOT가 아니라 비-SSOT 검토 목록입니다. 구현 전 다시 검토해야 합니다.
