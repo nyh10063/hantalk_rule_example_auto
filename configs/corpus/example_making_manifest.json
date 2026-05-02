@@ -5,10 +5,39 @@
   "encoding": "utf-8-sig",
   "sampling": {
     "daily_conversation": 5000,
-    "news": 2000,
+    "news": 700,
     "non_published": 2000,
-    "learner_spoken_5_6": 1000
+    "learner_spoken_5_6": 2500
   },
+  "sampling_schedules": [
+    {
+      "schedule_id": "batch_000_001_initial_ratio",
+      "start_batch_index": 0,
+      "end_batch_index": 1,
+      "sampling": {
+        "daily_conversation": 5000,
+        "news": 2000,
+        "non_published": 2000,
+        "learner_spoken_5_6": 1000
+      }
+    },
+    {
+      "schedule_id": "batch_002_plus_rebalanced_ratio",
+      "start_batch_index": 2,
+      "rank_start_offsets": {
+        "daily_conversation": 10000,
+        "news": 4000,
+        "non_published": 4000,
+        "learner_spoken_5_6": 2000
+      },
+      "sampling": {
+        "daily_conversation": 5000,
+        "news": 700,
+        "non_published": 2000,
+        "learner_spoken_5_6": 2500
+      }
+    }
+  ],
   "corpora": {
     "daily_conversation": {
       "file": "일상대화말뭉치(2023_2024).txt"

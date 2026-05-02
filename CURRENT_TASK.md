@@ -5,7 +5,7 @@
 - Current phase: Phase 1 pilot
 - Current item: df003 `ㄴ/은 적 있/없`
 - Current project goal: 300개 문법항목의 검색용 정규식 및 오탐 필터링 인코더용 positive/negative 예문 구축 자동화
-- Current immediate goal: df003 batch_000 summary를 기준으로 batch_001 생성 및 검색 루프를 실행하기
+- Current immediate goal: df003 batch_001 human review를 진행하고 batch_000+batch_001 누적 TP/FP를 확인하기
 
 ## 현재까지 완료
 
@@ -80,10 +80,11 @@
   - prepared corpus JSONL을 읽고 DetectorEngine으로만 검색함
   - detection JSONL, 사람 검수용 CSV, search report JSON을 생성함
   - 여러 `--active-unit-id`를 받을 수 있게 구현함
+  - `--artifact-root`를 주면 단일 `--active-unit-id` 기준으로 `example_making/{item_id}/` 아래 산출물 경로를 자동 생성함
   - 사람 검수용 CSV에 `llm_temp_label`, `llm_note` 빈 열을 추가함
   - 사람 검수용 CSV를 Excel 호환성을 위해 `utf-8-sig`로 저장하도록 수정함
   - 검수 편의를 위해 CSV 열 순서를 `raw_text`, `regex_match_text`, `human_label`이 붙어 보이도록 조정함
-- 예문 구축용 batch 비율을 일상대화 5,000행, 뉴스 2,000행, 비출판물 2,000행, 학습자 말뭉치 1,000행으로 적용함
+- batch_000/001 예문 구축용 batch 비율을 일상대화 5,000행, 뉴스 2,000행, 비출판물 2,000행, 학습자 말뭉치 1,000행으로 적용함
 - 공통 prepared corpus batch 생성 완료:
   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_000.jsonl`
   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_000_report.json`
@@ -116,6 +117,14 @@
 - `dict.xlsx`의 `detect_rules` 23행 df003 verify rule `r_df003_v01` pattern을 확장함
   - 이전: `^\s*(?:으로|인|일|에)`
   - 이후: `^\s*(?:으로|인|일|에|극|금|되|립|었|을|응|정|했|화)`
+- batch_001 검색 전 detector bundle 재생성과 df003 gold test를 완료함
+- batch_001 prepared corpus 생성 완료:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_001.jsonl`
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_001_report.json`
+- 확정된 df003 detector bundle로 batch_001 검색 완료:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_001_detection.jsonl`
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_001_human_review.csv`
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_001_search_report.json`
 
 ## 이번에 테스트한 것
 
@@ -256,6 +265,7 @@
 - batch_000 검수 결과는 현재 `TP 60`, `FP 85`로 보고, 더 이상 안전하게 FP를 줄이기보다 다음 batch 반복 수집으로 넘어감
 - `src/summarize_review.py` 구현 완료
   - `--item-id`를 필수로 받음
+  - `--artifact-root`를 주면 `{artifact_root}/{item_id}/{item_id}_review_summary.json` 경로를 자동 생성함
   - labeled `.xlsx`와 `.csv`를 모두 읽음
   - header 이름은 `strip()`하여 비교함
   - 필수 열은 `hit_id`, `human_label`, `span_status`
@@ -284,36 +294,67 @@
   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_human_review_labeled.csv`
 - 같은 batch의 xlsx와 csv를 동시에 `--input`으로 넣으면 중복 `hit_id` error가 발생함을 확인함
 - `--item-id xx999`처럼 파일 내용과 다른 item ID를 넣으면 item mismatch error가 발생함을 확인함
-
+- batch_001 실행 전 bundle export 결과:
+  - `items=9`
+  - `runtime_units=5`
+  - `warnings=0`
+- batch_001 실행 전 df003 gold test 결과:
+  - `gold_total=50`
+  - `gold_matched=50`
+  - `gold_recall=1.0`
+  - `span_exact_recall=1.0`
+  - `component_span_success_count=50`
+  - `component_span_fallback_count=0`
+  - `fn_count=0`
+- batch_001 prepared corpus 생성 결과:
+  - 총 10,000행
+  - `daily_conversation=5000`
+  - `news=2000`
+  - `non_published=2000`
+  - `learner_spoken_5_6=1000`
+- batch_001 df003 corpus search 결과:
+  - input texts: 10,000
+  - texts with hits: 178
+  - candidates: 182
+  - candidates by domain: `daily_conversation=59`, `news=89`, `non_published=29`, `learner_spoken_5_6=5`
+  - span source counts: `component_spans=85`, `regex_match_fallback=97`
+- `python3 -m py_compile src/prepare_example_corpus.py` 통과
+- 새 sampling schedule 검증을 위해 `/private/tmp`에 batch_002 ratio check 산출물을 임시 생성함:
+  - total: 10,200
+  - `daily_conversation=5000`
+  - `news=700`
+  - `non_published=2000`
+  - `learner_spoken_5_6=2500`
+  - schedule: `batch_002_plus_rebalanced_ratio`
+  - rank ranges: `daily_conversation=10000:15000`, `news=4000:4700`, `non_published=4000:6000`, `learner_spoken_5_6=2000:4500`
+- `git diff --check`로 문서와 `src/prepare_example_corpus.py`의 whitespace 오류가 없음을 확인함
+- batch_002부터 예문 구축용 prepared corpus 비율을 조정함:
+  - `daily_conversation=5000`
+  - `news=700`
+  - `non_published=2000`
+  - `learner_spoken_5_6=2500`
+- 비율 조정 이유를 `PROJECT_SPEC.md`와 `DECISIONS.md`에 기록함
+  - 뉴스 말뭉치 문장은 다른 말뭉치보다 대체로 2~3배 길고, 학습자 말뭉치 문장은 짧음
+  - 따라서 문장 수를 단순히 `5:2:2:1`로 두면 실제 텍스트량과 학습자 발화 비중이 의도와 다르게 나올 수 있음
+- `configs/corpus/example_making_manifest.json`에 `sampling_schedules`와 `rank_start_offsets`를 추가해 batch_000/001은 기존 비율로 재생성 가능하게 보존하고, batch_002 이후는 새 비율로 이전 사용 hash rank를 건너뛰어 생성하도록 수정함
+- 작업 속도를 줄이기 위해 2024년 신문 말뭉치 통합 파일을 5개 JSON 기반 축소본으로 다시 생성함:
+  - source folder: `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/news_paper(2024)`
+  - source JSON files: `NIRW2400000001.json`, `NLRW2400000001.json`, `NPRW2400000001.json`, `NWRW2400000001.json`, `NZRW2400000001.json`
+  - 확인용 산출물: `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/news_paper(2024)/news_paper_2024_form_source.txt`
+  - manifest가 읽는 산출물: `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/신문말뭉치(2024).txt`
+  - 형식: `form;source`
+  - 행 수: header 제외 1,215,885행, header 포함 1,215,886줄
+- 향후 예문 구축 검색 산출물은 item별 artifact 폴더에 저장하도록 정리함:
+  - 공통 prepared corpus: `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/`
+  - item별 산출물 root: `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/{item_id}/`
+  - 예: `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_002_human_review.csv`
 ## 다음 작업
 
-1. batch_001 검색 전에 detector bundle을 다시 export하고 df003 gold test를 실행함
-   - `python3 -m src.detector.export_bundle --dict datasets/dict/dict.xlsx --out configs/detector/detector_bundle.json`
-   - `python3 src/test_gold.py --item-id df003 --bundle configs/detector/detector_bundle.json --active-unit-id df003 --fail-on-fn`
-   - 통과 기준:
-     - `gold_recall=1.0`
-     - `span_exact_recall=1.0`
-     - `fn_count=0`
-2. batch_index=1 prepared corpus를 생성함
-   - 입력 root:
-     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making`
-   - 명령 형태:
-     - `python3 -m src.prepare_example_corpus --manifest configs/corpus/example_making_manifest.json --corpus-root ... --batch-index 1 --out .../example_making_batch_001.jsonl --report .../example_making_batch_001_report.json`
-   - 출력:
-     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_001.jsonl`
-     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_001_report.json`
-3. 확정된 df003 detector bundle로 batch_001을 검색함
-   - 명령 형태:
-     - `python3 -m src.search_corpus --bundle configs/detector/detector_bundle.json --input-jsonl .../example_making_batch_001.jsonl --active-unit-id df003 --out-jsonl .../df003_batch_001_detection.jsonl --review-csv .../df003_batch_001_human_review.csv --report-json .../df003_batch_001_search_report.json`
-   - 출력:
-     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_001_detection.jsonl`
-     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_001_human_review.csv`
-     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_001_search_report.json`
-4. 사람이 batch_001 검수 후 아래 이름으로 labeled 파일을 저장함
-   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_001_human_review_labeled.xlsx`
+1. 사람이 batch_001 검수 후 아래 이름으로 labeled 파일을 저장함
+   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_001_human_review_labeled.xlsx`
    - 필요 시 CSV 사본:
-     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_001_human_review_labeled.csv`
-5. batch_000 + batch_001을 `summarize_review.py`로 함께 집계함
+     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_001_human_review_labeled.csv`
+2. batch_000 + batch_001을 `summarize_review.py`로 함께 집계함
    - `positive_100=true`, `negative_100=true`이면 df003 예문 수집을 멈추고 encoder 후보 export 단계로 넘어감
    - 부족하면 batch_002부터 같은 루프를 반복함
 
@@ -327,12 +368,12 @@
 - 말뭉치 FP를 줄이기 위해 정규식을 수정하더라도 gold recall=1이 깨지면 검색용 정규식으로 확정하지 않습니다.
 - 브릿지는 무조건 채택하지 않고, 넓은 정규식으로 gold recall=1을 확보한 뒤 후보 버전 또는 `bridge_id` 버전을 만들어 비교합니다.
 - 브릿지 후보는 gold recall=1 유지와 5,000행 말뭉치 FP 감소량을 확인한 뒤, FP 감소 효과가 있거나 span 경계가 좋아질 때만 채택합니다. df003의 `adnominal_n`은 현재 채택되어 있습니다.
-- 일반 말뭉치 검색은 공통 prepared corpus batch를 사용합니다. 현재 batch 비율은 일상대화 5,000행, 뉴스 2,000행, 비출판물 2,000행, 학습자 말뭉치 1,000행입니다.
+- 일반 말뭉치 검색은 공통 prepared corpus batch를 사용합니다. batch_002부터 현재 batch 비율은 일상대화 5,000행, 뉴스 700행, 비출판물 2,000행, 학습자 말뭉치 2,500행입니다. batch_000/001은 이전 비율 산출물로 보존합니다.
 
 ## 미해결 문제
 
 - df003 span 기준은 기존 df003 gold span을 변환해 사용했지만, 최종 교육적 span 정책은 사람이 확인해야 합니다.
-- 공통 prepared corpus batch는 stable hash 기반으로 구현했지만, 이후 batch_index를 늘릴 때 domain별 중복 없음과 검수량 운영 방식은 계속 확인해야 합니다.
+- 공통 prepared corpus batch는 stable hash 기반으로 구현했고, batch_002부터 비율 변경에 따른 domain별 중복을 피하기 위해 `sampling_schedules`와 `rank_start_offsets`를 사용합니다. 이후 batch_index를 늘릴 때 domain별 중복 없음과 검수량 운영 방식은 계속 확인해야 합니다.
 - 기본 detector 경로는 Kiwi 없이 진행합니다. 다만 문자 기반 bridge로 해결하기 어려운 항목이 나오면 Kiwi 상업 라이선스/속도/정확도 및 다른 형태소 분석기 후보를 비교해야 합니다.
 - 예외적으로 형태소 분석을 쓰게 될 경우 문장 단위 형태소 분석 cache를 전체 300개 규칙에 공유할지, 난이도/목표 항목에 따라 필요한 규칙에만 공유할지는 HanTalk 본 시스템 설계 단계에서 다시 결정해야 합니다.
 - `PROJECT_SPEC.md`의 `향후 detector 설계 검토 메모`는 SSOT가 아니라 비-SSOT 검토 목록입니다. 구현 전 다시 검토해야 합니다.

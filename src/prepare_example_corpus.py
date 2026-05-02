@@ -133,6 +133,7 @@ def _sample_domain(
     domain: str,
     file_path: Path,
     requested: int,
+    rank_start: int,
     batch_id: str,
     batch_index: int,
     seed: int,
@@ -141,9 +142,13 @@ def _sample_domain(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if requested <= 0:
         raise ValueError(f"sampling size must be positive for domain={domain}: {requested}")
-    keep_count = (batch_index + 1) * requested
+    if rank_start < 0:
+        raise ValueError(f"rank_start must be >= 0 for domain={domain}: {rank_start}")
+    start = rank_start
+    end = start + requested
+    keep_count = end
     if keep_count <= 0:
-        raise ValueError(f"batch_index must be >= 0: {batch_index}")
+        raise ValueError(f"keep_count must be positive for domain={domain}: {keep_count}")
 
     heap: list[tuple[int, str, dict[str, Any]]] = []
     n_seen = 0
@@ -191,8 +196,6 @@ def _sample_domain(
                 heapq.heapreplace(heap, item)
 
     candidates = sorted(((-neg_hash, tie, record) for neg_hash, tie, record in heap), key=lambda item: (item[0], item[1]))
-    start = batch_index * requested
-    end = start + requested
     selected = [record for _, _, record in candidates[start:end]]
     for idx, record in enumerate(selected, start=1):
         record["text_id"] = f"{domain}_b{batch_index:03d}_{idx:06d}"
@@ -203,6 +206,8 @@ def _sample_domain(
         "source_file": str(file_path),
         "requested": requested,
         "batch_index": batch_index,
+        "rank_start": start,
+        "rank_end_exclusive": end,
         "keep_count": keep_count,
         "header_detected": has_header,
         "header": header,
@@ -216,6 +221,34 @@ def _sample_domain(
         "warning": None if len(selected) == requested else f"selected {len(selected)} rows, requested {requested}",
     }
     return selected, report
+
+
+def _select_sampling_schedule(manifest: dict[str, Any], batch_index: int) -> dict[str, Any]:
+    schedules = manifest.get("sampling_schedules") or []
+    if not schedules:
+        return {
+            "schedule_id": "default",
+            "start_batch_index": 0,
+            "sampling": manifest.get("sampling") or {},
+            "rank_start_offsets": {},
+        }
+
+    matched: dict[str, Any] | None = None
+    for schedule in schedules:
+        start_batch_index = int(schedule.get("start_batch_index", 0))
+        end_batch_index = schedule.get("end_batch_index")
+        if batch_index < start_batch_index:
+            continue
+        if end_batch_index is not None and batch_index > int(end_batch_index):
+            continue
+        if matched is None or start_batch_index >= int(matched.get("start_batch_index", 0)):
+            matched = schedule
+
+    if matched is None:
+        raise ValueError(f"No sampling schedule matches batch_index={batch_index}")
+    if not matched.get("sampling"):
+        raise ValueError(f"Sampling schedule is missing sampling: {matched}")
+    return matched
 
 
 def prepare_corpus(
@@ -234,7 +267,13 @@ def prepare_corpus(
     batch_id_prefix = str(manifest.get("batch_id_prefix", "example_making"))
     batch_id = f"{batch_id_prefix}_batch_{batch_index:03d}"
     corpora = manifest.get("corpora") or {}
-    sampling = manifest.get("sampling") or {}
+    schedule = _select_sampling_schedule(manifest, batch_index)
+    sampling = schedule.get("sampling") or {}
+    schedule_id = str(schedule.get("schedule_id", "default"))
+    schedule_start_batch_index = int(schedule.get("start_batch_index", 0))
+    rank_start_offsets = {
+        domain: int(offset) for domain, offset in (schedule.get("rank_start_offsets") or {}).items()
+    }
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     all_records: list[dict[str, Any]] = []
@@ -244,12 +283,14 @@ def prepare_corpus(
         if domain not in corpora:
             raise KeyError(f"manifest sampling domain is missing from corpora: {domain}")
         requested = int(sampling[domain])
+        rank_start = rank_start_offsets.get(domain, 0) + (batch_index - schedule_start_batch_index) * requested
         file_name = str(corpora[domain]["file"])
         file_path = _resolve_file(corpus_root, file_name)
         selected, domain_report = _sample_domain(
             domain=domain,
             file_path=file_path,
             requested=requested,
+            rank_start=rank_start,
             batch_id=batch_id,
             batch_index=batch_index,
             seed=seed,
@@ -271,6 +312,9 @@ def prepare_corpus(
         "output_path": str(out_path),
         "batch_id": batch_id,
         "batch_index": batch_index,
+        "sampling_schedule_id": schedule_id,
+        "sampling_schedule_start_batch_index": schedule_start_batch_index,
+        "sampling_rank_start_offsets": rank_start_offsets,
         "seed": seed,
         "hash_method": HASH_METHOD,
         "delimiter": delimiter,

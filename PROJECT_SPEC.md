@@ -205,7 +205,7 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 
 절차:
 
-1. 검색용 정규식으로 공통 prepared corpus batch를 검색하여 hit 후보를 수집합니다. 현재 예문 구축 batch는 일상대화 5,000행, 뉴스 2,000행, 비출판물 2,000행, 학습자 말뭉치 1,000행으로 구성합니다.
+1. 검색용 정규식으로 공통 prepared corpus batch를 검색하여 hit 후보를 수집합니다. batch_002부터 예문 구축 batch는 일상대화 5,000행, 뉴스 700행, 비출판물 2,000행, 학습자 말뭉치 2,500행으로 구성합니다. batch_000/001은 이전 비율인 일상대화 5,000행, 뉴스 2,000행, 비출판물 2,000행, 학습자 말뭉치 1,000행으로 생성된 산출물입니다.
 2. hit 후보를 사람이 TP/FP로 검수합니다. LLM은 임시 판단과 이유를 제공할 수 있지만 최종 라벨이 아닙니다.
 3. 검수된 FP 유형을 근거로, gold recall=1을 유지하는 조건에서 정규식을 수정하여 FP를 줄입니다.
 4. 더 이상 안전하게 FP를 줄이기 어렵다고 판단되면 해당 정규식을 검색용 정규식 후보로 확정합니다.
@@ -285,11 +285,11 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 | `exported_gold/df003_gold_50.jsonl` | `gold.xlsx`에서 자동 생성한 item별 정규식 gold positive 50개 | 자동화 | gold test CLI |
 | `regex/df003_versions.jsonl` | 정규식 버전과 성능 로그 | 자동화 | regex iteration/report CLI |
 | `HanTalk_work/corpus/example_making/prepared/example_making_batch_###.jsonl` | 여러 말뭉치에서 stable hash sampling으로 만든 공통 검색 batch | 자동화 | `search_corpus.py` |
-| `HanTalk_arti/example_making/{item_id}_batch_###_detection.jsonl` | DetectorEngine 검색 결과 원본 | 자동화 | 사람 + 검수/분석 CLI |
-| `HanTalk_arti/example_making/{item_id}_batch_###_human_review.csv` | 사람 검수용 후보 표 | 자동화 | 사람 검수 |
-| `HanTalk_arti/example_making/{item_id}_batch_###_human_review_labeled.xlsx` | 사람이 확정한 TP/FP/span 검수 완료본 | 사람 | `summarize_review.py`, dataset export CLI |
-| `HanTalk_arti/example_making/{item_id}_batch_###_human_review_labeled.csv` | 사람이 확정한 TP/FP/span 검수 완료본의 CSV 사본 | 사람 또는 자동 변환 | `summarize_review.py`, dataset export CLI |
-| `HanTalk_arti/example_making/{item_id}_review_summary.json` | labeled review 파일 누적 집계와 목표 달성 여부 | 자동화 | 사람 + 다음 batch 판단 |
+| `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_detection.jsonl` | DetectorEngine 검색 결과 원본 | 자동화 | 사람 + 검수/분석 CLI |
+| `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_human_review.csv` | 사람 검수용 후보 표 | 자동화 | 사람 검수 |
+| `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_human_review_labeled.xlsx` | 사람이 확정한 TP/FP/span 검수 완료본 | 사람 | `summarize_review.py`, dataset export CLI |
+| `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_human_review_labeled.csv` | 사람이 확정한 TP/FP/span 검수 완료본의 CSV 사본 | 사람 또는 자동 변환 | `summarize_review.py`, dataset export CLI |
+| `HanTalk_arti/example_making/{item_id}/{item_id}_review_summary.json` | labeled review 파일 누적 집계와 목표 달성 여부 | 자동화 | 사람 + 다음 batch 판단 |
 | `datasets/df003_encoder_candidates.jsonl` | 인코더 학습 후보 데이터 | 자동화 | 향후 fine-tuning |
 | `logs/df003_regex_iterations.jsonl` | FN 분석과 수정 이력 | 자동화 | 사람 + Codex |
 
@@ -504,25 +504,37 @@ configs/corpus/example_making_manifest.json
 | `non_published` | `비출판물말뭉치.txt` |
 | `learner_spoken_5_6` | `학습자말뭉치(구어_5_6급).txt` |
 
-현재 batch 구성:
+`신문말뭉치(2024).txt`는 작업 속도를 위해 2024년 신문 JSON 5개 파일만 사용해 다시 생성한 축소 통합 파일입니다. 생성 원본 폴더와 확인용 산출물은 아래와 같습니다.
+
+```text
+/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/news_paper(2024)
+/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/news_paper(2024)/news_paper_2024_form_source.txt
+```
+
+축소 통합 파일은 `form;source` 형식이며, header 제외 1,215,885행입니다.
+
+현재 batch 구성(batch_002 이후):
 
 | corpus_domain | sample size |
 | --- | ---: |
 | `daily_conversation` | 5,000 |
-| `news` | 2,000 |
+| `news` | 700 |
 | `non_published` | 2,000 |
-| `learner_spoken_5_6` | 1,000 |
+| `learner_spoken_5_6` | 2,500 |
+
+이 비율은 문장 수 기준 sampling에서 실제 문장량이 과도하게 흔들리는 것을 줄이기 위한 조정입니다. 뉴스 말뭉치 문장은 다른 말뭉치 문장보다 대체로 2~3배 길고, 학습자 말뭉치 문장은 짧아서 문장 수를 단순히 `5:2:2:1`로 두면 실제 텍스트량과 학습자 발화 비중이 의도와 다르게 나올 수 있습니다.
 
 원칙:
 
 - manifest에는 절대경로를 넣지 않습니다.
 - 실제 말뭉치 폴더는 CLI의 `--corpus-root`로 전달합니다.
+- `example_making_manifest.json`은 `sampling_schedules`를 지원합니다. batch_000/001은 초기 비율로 재생성 가능하게 보존하고, batch_002 이후는 조정된 비율로 생성합니다.
 - 입력 통합 파일은 `text;source` 계열 형식으로 읽습니다. header가 있으면 `sentence`, `form`, `text`, `raw_text`를 text column 후보로, `source`를 source column 후보로 봅니다.
 - header가 예상과 다르면 첫 번째 열을 text, 마지막 열을 source로 해석합니다.
 - 데이터 line은 문장 안의 세미콜론을 보호하기 위해 마지막 delimiter 기준으로 `rsplit(delimiter, 1)` 방식으로 분리합니다.
 - 대용량 말뭉치를 메모리에 모두 올리지 않고, stable hash streaming sampling으로 domain별 batch를 구성합니다.
 - 같은 `seed`, `batch_index`, 입력 파일이면 prepared JSONL은 재현 가능해야 합니다.
-- `batch_index=k`는 domain별 hash 순서에서 `kN`부터 `(k+1)N` 구간을 선택합니다.
+- 기본 동작에서 `batch_index=k`는 domain별 hash 순서에서 `kN`부터 `(k+1)N` 구간을 선택합니다. 단, `sampling_schedules`에 `rank_start_offsets`가 있으면 이전 비율로 이미 사용한 hash rank를 건너뛰고 새 비율 batch를 이어서 선택합니다.
 
 생성 명령 예:
 
@@ -552,14 +564,15 @@ python3 -m src.search_corpus \
   --bundle configs/detector/detector_bundle.json \
   --input-jsonl /Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_000.jsonl \
   --active-unit-id df003 \
-  --out-jsonl /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_detection.jsonl \
-  --review-csv /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_human_review.csv \
-  --report-json /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_search_report.json
+  --artifact-root /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making
 ```
 
 원칙:
 
 - `--active-unit-id`는 여러 번 줄 수 있습니다. Phase 1 실행은 우선 `df003` 하나로 합니다.
+- `--artifact-root`를 주면 item별 산출물은 `HanTalk_arti/example_making/{item_id}/` 아래에 자동 저장됩니다.
+- 예를 들어 위 명령은 `df003/df003_batch_000_detection.jsonl`, `df003/df003_batch_000_human_review.csv`, `df003/df003_batch_000_search_report.json`을 생성합니다.
+- 여러 `--active-unit-id`를 한 번에 검색할 때는 item별 폴더를 자동으로 정할 수 없으므로 `--out-jsonl`, `--review-csv`, `--report-json`을 명시합니다.
 - detection JSONL은 hit가 있는 문장만 저장합니다.
 - human review CSV는 candidate 하나를 한 행으로 펼쳐 사람이 `human_label`, `span_status`, `corrected_span_segments`, `memo`, `reviewer`를 채울 수 있게 합니다.
 - 검수 편의를 위해 `raw_text`, `regex_match_text`, `human_label` 열을 서로 붙여 배치합니다.
@@ -579,7 +592,14 @@ python3 -m src.search_corpus \
 /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_human_review_labeled.csv
 ```
 
-`/Users/yonghyunnam/Downloads/for_codex2` 같은 전달용 폴더는 임시 확인 폴더로만 사용하고, 자동화의 기준 입력으로 삼지 않습니다. 기준 labeled 파일은 `HanTalk_arti/example_making` 아래에 둡니다.
+신규 산출물은 item별 폴더를 기준으로 둡니다.
+
+```text
+/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_000_human_review_labeled.xlsx
+/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_000_human_review_labeled.csv
+```
+
+`/Users/yonghyunnam/Downloads/for_codex2` 같은 전달용 폴더는 임시 확인 폴더로만 사용하고, 자동화의 기준 입력으로 삼지 않습니다. 기준 labeled 파일은 `HanTalk_arti/example_making/{item_id}` 아래에 둡니다.
 
 다음 자동화 단계에서는 `src/summarize_review.py`를 만들어 labeled xlsx/csv 파일을 하나 이상 읽고 누적 집계를 생성합니다.
 
@@ -594,6 +614,12 @@ python3 -m src.search_corpus \
 
 ```text
 /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/{item_id}_review_summary.json
+```
+
+신규 summary 산출물은 아래 item별 폴더를 기준으로 합니다.
+
+```text
+/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/{item_id}/{item_id}_review_summary.json
 ```
 
 `summarize_review.py`의 최소 집계 항목:

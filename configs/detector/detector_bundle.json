@@ -3,7 +3,7 @@
   "source": {
     "dict_xlsx": "datasets/dict/dict.xlsx",
     "source_sha256": "5786221260fe941dbd6405875c3215b94830dab529e187ee4f975e48920c24a0",
-    "generated_at": "2026-05-02T10:31:06.778113+00:00"
+    "generated_at": "2026-05-02T12:24:18.991958+00:00"
   },
   "items_by_e_id": {
     "ce001": {

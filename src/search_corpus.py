@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import sys
 import time
 from collections import Counter, defaultdict
@@ -61,6 +62,8 @@ REVIEW_COLUMNS = [
     "reviewer",
 ]
 
+BATCH_ID_RE = re.compile(r"(batch_\d+)")
+
 
 def _write_json(path: Path, obj: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -89,6 +92,60 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
             except json.JSONDecodeError as exc:
                 raise ValueError(f"{path}:{line_no} invalid JSONL") from exc
     return records
+
+
+def _derive_batch_id(input_jsonl: Path, explicit_batch_id: str | None = None) -> str:
+    if explicit_batch_id is not None:
+        batch_id = explicit_batch_id.strip()
+        if not batch_id:
+            raise ValueError("--batch-id must not be blank")
+        return batch_id
+    match = BATCH_ID_RE.search(input_jsonl.stem)
+    if match:
+        return match.group(1)
+    return input_jsonl.stem
+
+
+def _resolve_output_paths(
+    *,
+    active_unit_ids: list[str],
+    input_jsonl: Path,
+    artifact_root: Path | None,
+    batch_id: str | None,
+    out_jsonl: Path | None,
+    review_csv: Path | None,
+    report_json: Path | None,
+) -> tuple[Path, Path, Path]:
+    if out_jsonl and review_csv and report_json:
+        return out_jsonl, review_csv, report_json
+    if artifact_root is None:
+        missing = [
+            name
+            for name, value in [
+                ("--out-jsonl", out_jsonl),
+                ("--review-csv", review_csv),
+                ("--report-json", report_json),
+            ]
+            if value is None
+        ]
+        raise ValueError(
+            f"Missing output path(s): {', '.join(missing)}. "
+            "Pass them explicitly or use --artifact-root to derive item-specific paths."
+        )
+    if len(active_unit_ids) != 1:
+        raise ValueError(
+            "Automatic item-specific output paths require exactly one --active-unit-id. "
+            "Pass explicit output paths for multi-item search."
+        )
+
+    item_id = active_unit_ids[0]
+    batch_label = _derive_batch_id(input_jsonl, batch_id)
+    item_dir = artifact_root / item_id
+    return (
+        out_jsonl or item_dir / f"{item_id}_{batch_label}_detection.jsonl",
+        review_csv or item_dir / f"{item_id}_{batch_label}_human_review.csv",
+        report_json or item_dir / f"{item_id}_{batch_label}_search_report.json",
+    )
 
 
 def _review_row(
@@ -277,9 +334,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--bundle", required=True, type=Path)
     parser.add_argument("--input-jsonl", required=True, type=Path)
     parser.add_argument("--active-unit-id", action="append", dest="active_unit_ids", required=True)
-    parser.add_argument("--out-jsonl", required=True, type=Path)
-    parser.add_argument("--review-csv", required=True, type=Path)
-    parser.add_argument("--report-json", required=True, type=Path)
+    parser.add_argument("--out-jsonl", type=Path)
+    parser.add_argument("--review-csv", type=Path)
+    parser.add_argument("--report-json", type=Path)
+    parser.add_argument(
+        "--artifact-root",
+        type=Path,
+        help="Base artifact folder, e.g. /.../HanTalk_arti/example_making. Missing output paths are written under {artifact_root}/{item_id}/.",
+    )
+    parser.add_argument(
+        "--batch-id",
+        help="Batch label for derived filenames. Defaults to the first batch_### token in --input-jsonl.",
+    )
     parser.add_argument("--allow-experimental-polyset", action="store_true")
     parser.add_argument("--include-debug", action="store_true")
     return parser.parse_args(argv)
@@ -287,13 +353,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    try:
+        out_jsonl, review_csv, report_json = _resolve_output_paths(
+            active_unit_ids=args.active_unit_ids,
+            input_jsonl=args.input_jsonl,
+            artifact_root=args.artifact_root,
+            batch_id=args.batch_id,
+            out_jsonl=args.out_jsonl,
+            review_csv=args.review_csv,
+            report_json=args.report_json,
+        )
+    except Exception as exc:
+        print(f"[ERROR] {exc}", file=sys.stderr)
+        return 1
+
     report = search_corpus(
         bundle_path=args.bundle,
         input_jsonl=args.input_jsonl,
         active_unit_ids=args.active_unit_ids,
-        out_jsonl=args.out_jsonl,
-        review_csv=args.review_csv,
-        report_json=args.report_json,
+        out_jsonl=out_jsonl,
+        review_csv=review_csv,
+        report_json=report_json,
         allow_experimental_polyset=args.allow_experimental_polyset,
         include_debug=args.include_debug,
     )
@@ -305,8 +385,8 @@ def main(argv: list[str] | None = None) -> int:
                 "n_candidates": report["n_candidates"],
                 "n_candidates_by_domain": report["n_candidates_by_domain"],
                 "span_source_counts": report["span_source_counts"],
-                "report": str(args.report_json),
-                "review_csv": str(args.review_csv),
+                "report": str(report_json),
+                "review_csv": str(review_csv),
             },
             ensure_ascii=False,
             indent=2,

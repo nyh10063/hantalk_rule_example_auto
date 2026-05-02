@@ -61,6 +61,19 @@ def _write_json(path: Path, obj: dict[str, Any]) -> None:
         f.write("\n")
 
 
+def _resolve_summary_out_path(
+    *,
+    item_id: str,
+    out_path: Path | None,
+    artifact_root: Path | None,
+) -> Path:
+    if out_path is not None:
+        return out_path
+    if artifact_root is None:
+        raise ValueError("Missing --out. Pass --out explicitly or use --artifact-root to derive {artifact_root}/{item_id}/{item_id}_review_summary.json.")
+    return artifact_root / item_id / f"{item_id}_review_summary.json"
+
+
 def _normalize_header(value: Any) -> str:
     return str(value or "").strip()
 
@@ -366,7 +379,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         dest="inputs",
         help="Labeled review .xlsx or .csv file. Can be passed multiple times.",
     )
-    parser.add_argument("--out", required=True, help="Output summary JSON path")
+    parser.add_argument("--out", help="Output summary JSON path")
+    parser.add_argument(
+        "--artifact-root",
+        help="Base artifact folder, e.g. /.../HanTalk_arti/example_making. Used to derive {artifact_root}/{item_id}/{item_id}_review_summary.json when --out is omitted.",
+    )
     return parser
 
 
@@ -374,10 +391,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
     try:
+        out_path = _resolve_summary_out_path(
+            item_id=args.item_id.strip(),
+            out_path=Path(args.out) if args.out else None,
+            artifact_root=Path(args.artifact_root) if args.artifact_root else None,
+        )
         summary = summarize_reviews(
             item_id=args.item_id,
             input_paths=[Path(path) for path in args.inputs],
-            out_path=Path(args.out),
+            out_path=out_path,
         )
     except Exception as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
@@ -391,7 +413,7 @@ def main(argv: list[str] | None = None) -> int:
                 "label_counts": summary["label_counts"],
                 "target_reached": summary["target_reached"],
                 "next_action": summary["next_action"],
-                "out": args.out,
+                "out": str(out_path),
             },
             ensure_ascii=False,
             indent=2,
