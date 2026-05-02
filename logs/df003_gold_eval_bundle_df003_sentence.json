@@ -7,8 +7,17 @@
     "df003"
   ],
   "bundle_match_policy": "sentence",
-  "span_source": "regex_match",
-  "component_span_enabled": false,
+  "span_source": "detector_candidate_spans",
+  "component_span_enabled": true,
+  "component_span_success_count": 50,
+  "component_span_success_rate": 1.0,
+  "component_span_fallback_count": 1,
+  "component_span_fallback_rate": 0.02,
+  "component_span_regex_match_count": 0,
+  "span_source_counts": {
+    "component_spans": 53,
+    "regex_match_fallback": 1
+  },
   "gold_total": 50,
   "gold_matched": 50,
   "gold_recall": 1.0,
@@ -17,8 +26,8 @@
   "sentence_recall": 1.0,
   "span_overlap_count": 50,
   "span_overlap_recall": 1.0,
-  "span_exact_count": 0,
-  "span_exact_recall": 0.0,
+  "span_exact_count": 50,
+  "span_exact_recall": 1.0,
   "hard_failed_candidate_count": 0,
-  "created_at": "2026-05-01T13:03:28.922515+00:00"
+  "created_at": "2026-05-02T01:40:04.803663+00:00"
 }

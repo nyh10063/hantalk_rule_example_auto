@@ -1,8 +1,4 @@
-"""Minimal runtime DetectorEngine for HanTalk.
-
-This first implementation intentionally uses regex match spans only. It does
-not yet assemble educational component spans such as "본 적 ... 있".
-"""
+"""Runtime DetectorEngine for HanTalk."""
 
 from __future__ import annotations
 
@@ -11,7 +7,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .span_utils import make_char_window, make_span_key, make_span_text, validate_span_segments
+from .component_locator import ComponentLocator
+from .span_utils import DEFAULT_GAP_MARKER, make_char_window, make_span_key, make_span_text, validate_span_segments
 
 RESULT_SCHEMA_VERSION = "hantalk_detector_result_v1"
 
@@ -24,6 +21,8 @@ class DetectorEngine:
         self.bundle_path = bundle_path
         self.runtime_units: dict[str, dict[str, Any]] = bundle.get("runtime_units") or {}
         self.rules_by_ruleset_id: dict[str, list[dict[str, Any]]] = bundle.get("rules_by_ruleset_id") or {}
+        self.components_by_e_id: dict[str, list[dict[str, Any]]] = bundle.get("components_by_e_id") or {}
+        self.component_locator = ComponentLocator(self.components_by_e_id)
         self._compiled_rules: dict[str, re.Pattern[str]] = {}
         self._rule_by_id: dict[str, dict[str, Any]] = {}
         self._compile_rules()
@@ -50,9 +49,13 @@ class DetectorEngine:
         allow_all: bool = False,
         allow_experimental_polyset: bool = False,
         max_matches_per_rule: int = 50,
+        max_candidates_per_component: int = 20,
+        max_component_paths: int = 2000,
         text_id: str | None = None,
         profile_id: str | None = None,
         window_chars: int = 20,
+        component_window_chars: int = 20,
+        include_debug: bool = False,
     ) -> dict[str, Any]:
         """Detect grammar candidates in raw_text.
 
@@ -90,13 +93,16 @@ class DetectorEngine:
                             continue
                         rule_match_count += 1
                         detect_match_count += 1
-                        span_segments = validate_span_segments(raw_text, [[start, end]])
                         raw_candidates.append(
                             self._candidate_from_match(
                                 raw_text=raw_text,
                                 unit=unit,
-                                span_segments=span_segments,
+                                regex_match_span=[start, end],
                                 detect_rule=rule,
+                                component_window_chars=component_window_chars,
+                                max_candidates_per_component=max_candidates_per_component,
+                                max_component_paths=max_component_paths,
+                                include_debug=include_debug,
                             )
                         )
 
@@ -119,6 +125,9 @@ class DetectorEngine:
                 continue
             kept_candidates.append(candidate)
 
+        component_summary = self._component_span_summary(kept_candidates)
+        component_summary_before_verify = self._component_span_summary(merged_candidates)
+
         return {
             "schema_version": RESULT_SCHEMA_VERSION,
             "text_id": text_id,
@@ -134,6 +143,11 @@ class DetectorEngine:
                 "n_candidates_hard_failed": hard_fail_count,
                 "n_matches_truncated": truncated_match_count,
                 "truncated_rules": truncated_rules,
+                "n_component_span_success": component_summary["component_spans"],
+                "n_component_span_fallback": component_summary["regex_match_fallback"],
+                "n_component_span_regex_only": component_summary["regex_match"],
+                "span_source_counts": component_summary,
+                "span_source_counts_before_verify": component_summary_before_verify,
             },
         }
 
@@ -169,25 +183,66 @@ class DetectorEngine:
         *,
         raw_text: str,
         unit: dict[str, Any],
-        span_segments: list[list[int]],
+        regex_match_span: list[int],
         detect_rule: dict[str, Any],
+        component_window_chars: int,
+        max_candidates_per_component: int,
+        max_component_paths: int,
+        include_debug: bool,
     ) -> dict[str, Any]:
-        return {
+        regex_span_segments = validate_span_segments(raw_text, [regex_match_span])
+        origin_e_id = str(detect_rule["e_id"])
+        component_result = self.component_locator.locate(
+            raw_text=raw_text,
+            origin_e_id=origin_e_id,
+            regex_match_span=regex_match_span,
+            component_window_chars=component_window_chars,
+            max_candidates_per_component=max_candidates_per_component,
+            max_component_paths=max_component_paths,
+            include_debug=include_debug,
+        )
+
+        if component_result.get("ok"):
+            span_segments = component_result["span_segments"]
+            span_source = "component_spans"
+            component_span_enabled = True
+            component_span_status = "ok"
+            component_spans = component_result.get("component_spans") or {}
+            applied_bridge_ids = component_result.get("applied_bridge_ids") or []
+        else:
+            span_segments = regex_span_segments
+            reason = str(component_result.get("reason") or "component_span_not_available")
+            span_source = "regex_match" if reason == "no_components" else "regex_match_fallback"
+            component_span_enabled = False
+            component_span_status = reason
+            component_spans = {}
+            applied_bridge_ids = []
+
+        candidate = {
+            "origin_e_id": origin_e_id,
             "unit_id": unit["unit_id"],
             "unit_type": unit["unit_type"],
             "member_e_ids": list(unit.get("member_e_ids") or []),
             "group": unit.get("group"),
             "canonical_form": unit.get("canonical_form"),
+            "regex_match_span": regex_match_span,
+            "regex_match_text": raw_text[int(regex_match_span[0]) : int(regex_match_span[1])],
             "span_segments": span_segments,
             "span_key": make_span_key(span_segments),
-            "span_text": make_span_text(raw_text, span_segments),
-            "span_source": "regex_match",
-            "component_span_enabled": False,
+            "span_text": make_span_text(raw_text, span_segments, gap_marker=DEFAULT_GAP_MARKER),
+            "span_source": span_source,
+            "component_span_enabled": component_span_enabled,
+            "component_span_status": component_span_status,
+            "component_spans": component_spans,
+            "applied_bridge_ids": applied_bridge_ids,
             "detect_ruleset_ids": list(unit.get("detect_ruleset_ids") or []),
             "verify_ruleset_ids": list(unit.get("verify_ruleset_ids") or []),
             "detect_rule_ids": [detect_rule["rule_id"]],
             "hard_fail_rule_ids": [],
         }
+        if include_debug and component_result.get("component_debug"):
+            candidate["component_debug"] = component_result["component_debug"]
+        return candidate
 
     def _merge_candidates(self, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
         merged: dict[tuple[str, str], dict[str, Any]] = {}
@@ -219,3 +274,19 @@ class DetectorEngine:
                 if pattern.search(haystack):
                     hard_fail_rule_ids.append(rule["rule_id"])
         return hard_fail_rule_ids
+
+    @staticmethod
+    def _component_span_summary(candidates: list[dict[str, Any]]) -> dict[str, int]:
+        summary = {
+            "component_spans": 0,
+            "regex_match_fallback": 0,
+            "regex_match": 0,
+            "other": 0,
+        }
+        for candidate in candidates:
+            span_source = str(candidate.get("span_source") or "")
+            if span_source in summary:
+                summary[span_source] += 1
+            else:
+                summary["other"] += 1
+        return summary

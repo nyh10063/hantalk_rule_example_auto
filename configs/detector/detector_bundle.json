@@ -2,8 +2,8 @@
   "schema_version": "hantalk_detector_bundle_v1",
   "source": {
     "dict_xlsx": "datasets/dict/dict.xlsx",
-    "source_sha256": "e754fe0a557b28ecf550ce6dbb82773da8b77f9fdcdfe1f3c7071006b8cf1d92",
-    "generated_at": "2026-05-01T13:03:29.122729+00:00"
+    "source_sha256": "c105bc1ce956b1d270c0362d510fe720ebe2912a78c18bcadfe9dab793483325",
+    "generated_at": "2026-05-02T01:39:54.241163+00:00"
   },
   "items_by_e_id": {
     "ce001": {
@@ -157,7 +157,8 @@
         "comp_order": 1,
         "order_policy": "fx",
         "min_gap_to_next": null,
-        "max_gap_to_next": null
+        "max_gap_to_next": null,
+        "bridge_id": null
       }
     ],
     "ce002": [
@@ -170,7 +171,8 @@
         "comp_order": 1,
         "order_policy": "fx",
         "min_gap_to_next": null,
-        "max_gap_to_next": null
+        "max_gap_to_next": null,
+        "bridge_id": null
       }
     ],
     "ce003": [
@@ -183,7 +185,8 @@
         "comp_order": 1,
         "order_policy": "fx",
         "min_gap_to_next": null,
-        "max_gap_to_next": null
+        "max_gap_to_next": null,
+        "bridge_id": null
       }
     ],
     "df003": [
@@ -196,7 +199,8 @@
         "comp_order": 1,
         "order_policy": "fx",
         "min_gap_to_next": 0,
-        "max_gap_to_next": 6
+        "max_gap_to_next": 6,
+        "bridge_id": "adnominal_n"
       },
       {
         "e_id": "df003",
@@ -207,7 +211,8 @@
         "comp_order": 2,
         "order_policy": "fx",
         "min_gap_to_next": 0,
-        "max_gap_to_next": 13
+        "max_gap_to_next": 13,
+        "bridge_id": null
       },
       {
         "e_id": "df003",
@@ -218,7 +223,8 @@
         "comp_order": 3,
         "order_policy": "fx",
         "min_gap_to_next": null,
-        "max_gap_to_next": null
+        "max_gap_to_next": null,
+        "bridge_id": null
       }
     ],
     "df004": [
@@ -231,7 +237,8 @@
         "comp_order": 1,
         "order_policy": "fx",
         "min_gap_to_next": 0,
-        "max_gap_to_next": 3
+        "max_gap_to_next": 3,
+        "bridge_id": null
       },
       {
         "e_id": "df004",
@@ -242,7 +249,8 @@
         "comp_order": 2,
         "order_policy": "fx",
         "min_gap_to_next": null,
-        "max_gap_to_next": null
+        "max_gap_to_next": null,
+        "bridge_id": null
       }
     ],
     "df005": [
@@ -255,7 +263,8 @@
         "comp_order": 1,
         "order_policy": "fx",
         "min_gap_to_next": 0,
-        "max_gap_to_next": 3
+        "max_gap_to_next": 3,
+        "bridge_id": null
       },
       {
         "e_id": "df005",
@@ -266,7 +275,8 @@
         "comp_order": 2,
         "order_policy": "fx",
         "min_gap_to_next": null,
-        "max_gap_to_next": null
+        "max_gap_to_next": null,
+        "bridge_id": null
       }
     ],
     "pt001": [
@@ -279,7 +289,8 @@
         "comp_order": 1,
         "order_policy": "fx",
         "min_gap_to_next": null,
-        "max_gap_to_next": null
+        "max_gap_to_next": null,
+        "bridge_id": null
       }
     ],
     "pt002": [
@@ -292,7 +303,8 @@
         "comp_order": 1,
         "order_policy": "fx",
         "min_gap_to_next": null,
-        "max_gap_to_next": null
+        "max_gap_to_next": null,
+        "bridge_id": null
       }
     ],
     "pt003": [
@@ -305,9 +317,18 @@
         "comp_order": 1,
         "order_policy": "fx",
         "min_gap_to_next": null,
-        "max_gap_to_next": null
+        "max_gap_to_next": null,
+        "bridge_id": null
       }
     ]
+  },
+  "bridges_by_id": {
+    "adnominal_n": {
+      "bridge_id": "adnominal_n",
+      "version": "v1",
+      "requires_morph": false,
+      "description": "Recover ㄴ/은 adnominal component spans, including final-ㄴ syllables such as 본/간/한."
+    }
   },
   "rules_by_ruleset_id": {
     "rs_ce001_d01": [

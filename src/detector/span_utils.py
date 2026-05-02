@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Iterable
 
 SpanSegment = list[int]
+DEFAULT_GAP_MARKER = " ... "
 
 
 def validate_span_segments(raw_text: str, span_segments: Iterable[Iterable[int]]) -> list[SpanSegment]:
@@ -28,6 +29,8 @@ def validate_span_segments(raw_text: str, span_segments: Iterable[Iterable[int]]
             raise ValueError(f"span segment {idx} must satisfy start < end: {values}")
         if end > text_len:
             raise ValueError(f"span segment {idx} exceeds raw_text length {text_len}: {values}")
+        if normalized and start < normalized[-1][1]:
+            raise ValueError(f"span segment {idx} overlaps or is out of order: {values}")
         normalized.append([start, end])
     if not normalized:
         raise ValueError("span_segments must not be empty")
@@ -43,7 +46,7 @@ def make_span_text(
     raw_text: str,
     span_segments: Iterable[Iterable[int]],
     *,
-    gap_marker: str = " ... ",
+    gap_marker: str = DEFAULT_GAP_MARKER,
 ) -> str:
     """Join span text pieces using a gap marker for discontinuous spans."""
     normalized = validate_span_segments(raw_text, span_segments)

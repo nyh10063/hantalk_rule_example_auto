@@ -11,6 +11,7 @@ import argparse
 import json
 import re
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -198,6 +199,10 @@ def evaluate_detector_bundle(
     span_overlap_count = 0
     span_exact_count = 0
     hard_failed_total = 0
+    component_span_success_count = 0
+    component_span_fallback_count = 0
+    component_span_regex_match_count = 0
+    span_source_counts: Counter[str] = Counter()
 
     for record in selected_gold:
         sentence = str(record.get("sentence") or "")
@@ -208,6 +213,8 @@ def evaluate_detector_bundle(
             c for c in detector_result.get("rejected_candidates", []) if _candidate_matches_item(c, item_id)
         ]
         hard_failed_total += len(rejected_candidates)
+        for candidate in candidates:
+            span_source_counts[str(candidate.get("span_source") or "unknown")] += 1
 
         sentence_matched = bool(candidates)
         span_overlap = any(
@@ -221,6 +228,12 @@ def evaluate_detector_bundle(
             span_overlap_count += 1
         if span_exact:
             span_exact_count += 1
+        if any(candidate.get("span_source") == "component_spans" for candidate in candidates):
+            component_span_success_count += 1
+        if any(candidate.get("span_source") == "regex_match_fallback" for candidate in candidates):
+            component_span_fallback_count += 1
+        if any(candidate.get("span_source") == "regex_match" for candidate in candidates):
+            component_span_regex_match_count += 1
 
         matched = sentence_matched if bundle_match_policy == "sentence" else span_overlap
         row = {
@@ -256,8 +269,14 @@ def evaluate_detector_bundle(
         "bundle_path": engine.bundle_path,
         "active_unit_ids": active_unit_ids,
         "bundle_match_policy": bundle_match_policy,
-        "span_source": "regex_match",
-        "component_span_enabled": False,
+        "span_source": "detector_candidate_spans",
+        "component_span_enabled": component_span_success_count > 0,
+        "component_span_success_count": component_span_success_count,
+        "component_span_success_rate": component_span_success_count / total if total else 0.0,
+        "component_span_fallback_count": component_span_fallback_count,
+        "component_span_fallback_rate": component_span_fallback_count / total if total else 0.0,
+        "component_span_regex_match_count": component_span_regex_match_count,
+        "span_source_counts": dict(sorted(span_source_counts.items())),
         "gold_total": total,
         "gold_matched": matched_count,
         "gold_recall": recall,
@@ -370,6 +389,9 @@ def main() -> int:
         print(f"sentence_recall={result['sentence_recall']:.6f}")
         print(f"span_overlap_recall={result['span_overlap_recall']:.6f}")
         print(f"span_exact_recall={result['span_exact_recall']:.6f}")
+        print(f"component_span_success_count={result['component_span_success_count']}")
+        print(f"component_span_fallback_count={result['component_span_fallback_count']}")
+        print(f"span_source_counts={json.dumps(result['span_source_counts'], ensure_ascii=False)}")
         print(f"hard_failed_candidate_count={result['hard_failed_candidate_count']}")
     print(f"fn_count={result['fn_count']}")
     print(f"report={report_path}")

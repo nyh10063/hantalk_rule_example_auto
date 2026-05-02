@@ -5,7 +5,7 @@
 - Current phase: Phase 1 pilot
 - Current item: df003 `ㄴ/은 적 있/없`
 - Current project goal: 300개 문법항목의 검색용 정규식 및 오탐 필터링 인코더용 positive/negative 예문 구축 자동화
-- Current immediate goal: df003 bundle 기반 DetectorEngine 결과를 뉴스/일상 대화 말뭉치 각 5,000행 batch에 적용하는 corpus search CLI 준비
+- Current immediate goal: df003 component span 조립이 붙은 DetectorEngine 결과를 뉴스/일상 대화 말뭉치 각 5,000행 batch에 적용하는 corpus search CLI 준비
 
 ## 현재까지 완료
 
@@ -26,7 +26,7 @@
   - `datasets/`
   - `logs/`
   - `src/`
-- `configs/grammar_items.yaml` 초안 작성 완료
+- `configs/grammar_items.yaml` 초안 작성 완료. 단, 현재 장기 SSOT는 `dict.xlsx`/`gold.xlsx`이며 YAML은 보조 config로만 취급함
 - `exported_gold/df003_gold_50.jsonl` 형식 확정 및 50개 positive gold 변환 완료
 - 정규식 gold의 장기 원본은 `datasets/gold/gold.xlsx`로 관리하고, item별 JSONL은 자동 생성 산출물로 두기로 문서화함
 - `PROJECT_SPEC.md`의 df003 gold schema를 실제 JSONL 형식에 맞게 업데이트함
@@ -37,39 +37,67 @@
 - df003 v1 정규식의 gold 50개 기준 recall이 1.0임을 확인함
 - df003 v2 bridge candidate 정규식의 gold 50개 기준 recall이 1.0임을 확인함
 - `src/detector/export_bundle.py` 구현 완료
-- `src/detector/engine.py` DetectorEngine 최소형 구현 완료
+- `src/detector/engine.py` DetectorEngine 기반 구현 완료
 - `src/detector/span_utils.py` 구현 완료
 - `configs/detector/detector_bundle.json` 생성 완료
 - `src/test_gold.py`에 DetectorEngine bundle 평가 경로 추가 완료
 - df003 bundle 경로의 gold 50개 기준 sentence recall과 span overlap recall이 1.0임을 확인함
 - `export_bundle.py` validation 강화 완료
 - DetectorEngine의 `active_unit_ids` 필수화, group=c polyset 기본 실행 차단, `max_matches_per_rule` 제한 추가 완료
+- `src/detector/bridges.py` 추가 완료
+- `src/detector/component_locator.py` 추가 완료
+- component 탐색 폭주 방지를 위해 `max_candidates_per_component`, `max_component_paths` 제한 추가 완료
+- `order_policy=fx/fl`를 component path 선택에 반영 완료
+- `rule_components.bridge_id` optional 지원 추가 완료
+- `dict.xlsx`의 `rule_components` 시트에 `bridge_id` 열을 추가하고 df003 c1에 `adnominal_n` 연결 완료
+- DetectorEngine candidate에 `origin_e_id`, `regex_match_span`, `regex_match_text`, `component_span_status`, `component_spans`, `applied_bridge_ids` 추가 완료
+- df003 component span 조립 성공 시 `span_source=component_spans`, 실패 시 `span_source=regex_match_fallback`으로 유지하도록 구현 완료
+- `PROJECT_SPEC.md`, `DECISIONS.md`, `CURRENT_TASK.md`에서 dict/bundle/component span 중심의 현재 방향과 어긋나는 옛 표현을 정리함
+- detector의 불연속 span 표시용 gap marker를 `DEFAULT_GAP_MARKER = " ... "`로 상수화하고, `span_utils.py`, `component_locator.py`, `engine.py`가 같은 값을 명시적으로 사용하도록 정리함
+- DetectorEngine summary에 `n_component_span_success`, `n_component_span_fallback`, `n_component_span_regex_only`, `span_source_counts`, `span_source_counts_before_verify`를 추가함
+- `src/test_gold.py` bundle 평가 report에 candidate-level `span_source_counts`를 추가함
+- `dict.xlsx`의 `rule_components` 시트에서 중복된 `bridge_id` 헤더를 정리하고, `comp_id` 옆의 `bridge_id` 열 하나만 남김
+- Kiwi는 기본 detector 경로에서 제외하고, 문자 기반 bridge로 해결하기 어려운 항목에서만 예외적으로 검토하기로 문서화함
 
 ## 이번에 테스트한 것
 
 - 기존 `정규식 골드/정규식 골드_df003.xlsx`에서 positive gold가 50개인지 확인함
 - 각 gold record의 `target_spans`가 sentence의 문자 구간에서 `target_text`로 추출되는지 확인함
 - `df003_gold_50.jsonl`이 JSONL 50줄로 생성되도록 검증함
-- `python3 -m py_compile src/test_gold.py`로 문법 검사를 수행함
+- `python3 -m py_compile src/test_gold.py`로 초기 문법 검사를 수행함
 - `python3 src/test_gold.py --item-id df003 --regex-version v1` 실행 결과 `gold_total=50`, `gold_matched=50`, `gold_recall=1.0`, `fn_count=0`을 확인함
 - `python3 src/test_gold.py --item-id df003 --regex-version v2_bridge_candidate --fail-on-fn` 실행 결과 `gold_total=50`, `gold_matched=50`, `gold_recall=1.0`, `fn_count=0`을 확인함
 - `rg`로 긴 활용형 중심의 df003 명명 표현이 남아 있지 않음을 확인함
 - `regex/df003_versions.jsonl` JSONL 파싱이 정상임을 확인함
-- `python3 -m py_compile src/detector/export_bundle.py src/detector/engine.py src/detector/span_utils.py src/test_gold.py` 통과
+- `python3 -m py_compile src/detector/bridges.py src/detector/component_locator.py src/detector/export_bundle.py src/detector/engine.py src/detector/span_utils.py src/test_gold.py` 통과
 - `python3 -m src.detector.export_bundle --dict datasets/dict/dict.xlsx --out configs/detector/detector_bundle.json` 통과
-- bundle export 결과: `items=9`, `runtime_units=5`, `warnings=8`
-- df003 bundle 평가(sentence): `gold_total=50`, `gold_matched=50`, `gold_recall=1.0`, `span_overlap_recall=1.0`, `span_exact_recall=0.0`, `fn_count=0`
-- df003 bundle 평가(overlap): `gold_total=50`, `gold_matched=50`, `gold_recall=1.0`, `span_overlap_recall=1.0`, `span_exact_recall=0.0`, `fn_count=0`
-- 직접 detect 확인: `"저는 제주도에 가 본 적이 있어요."`에서 1차 DetectorEngine은 `span_segments=[[12, 16]]`, `span_text="적이 있"`, `span_source="regex_match"`, `component_span_enabled=false`를 출력함
+- bundle export 결과: `items=9`, `runtime_units=5`, `warnings=0`
+- df003 bundle 평가(sentence): `gold_total=50`, `gold_matched=50`, `gold_recall=1.0`, `span_overlap_recall=1.0`, `span_exact_recall=1.0`, `component_span_success_count=50`, `fn_count=0`
+- df003 bundle 평가(overlap): `gold_total=50`, `gold_matched=50`, `gold_recall=1.0`, `span_overlap_recall=1.0`, `span_exact_recall=1.0`, `component_span_success_count=50`, `fn_count=0`
+- 직접 detect 확인: `"저는 제주도에 가 본 적이 있어요."`에서 DetectorEngine은 `span_segments=[[10, 13], [15, 16]]`, `span_text="본 적 ... 있"`, `span_source="component_spans"`, `applied_bridge_ids=["adnominal_n"]`을 출력함
 - `active_unit_ids` 없이 DetectorEngine을 실행하면 `ValueError: active_unit_ids is required unless allow_all=True`가 발생함을 확인함
 - `ps_neunde` polyset unit을 기본 옵션으로 실행하면 `ValueError`가 발생함을 확인함
+- 기준 문서에서 `configs/grammar_items.yaml`을 장기 SSOT처럼 보이게 하던 설명을 보조 config로 정리함
+- 기준 문서에서 `span_start/span_end` 중심 corpus hit schema를 `span_segments` 중심 detection JSONL/review CSV schema로 교체함
+- `order_policy=fx`는 고정 순서, `order_policy=fl`은 anchor 고정 + 인접 `fl`끼리만 교환하는 정책으로 기록함
+- 합성 테스트에서 인접 `fl` component끼리는 순서 교환이 허용되고, anchor가 포함된 교환은 차단됨을 확인함
+- df003은 `order_policy=fx`이므로 component order가 `c1 → c2 → c3` 하나로 유지됨을 debug 출력으로 확인함
+- `python3 -m py_compile src/detector/span_utils.py src/detector/component_locator.py src/detector/engine.py src/test_gold.py` 통과
+- gap marker 상수화 후 df003 bundle 평가에서 `gold_recall=1.0`, `span_exact_recall=1.0`, `fn_count=0` 유지 확인
+- 직접 detect 확인에서 `span_text="본 적 ... 있"` 출력이 유지됨을 확인함
+- `python3 -m src.detector.export_bundle --dict datasets/dict/dict.xlsx --out configs/detector/detector_bundle.json` 통과
+- bundle export 결과: `items=9`, `runtime_units=5`, `warnings=0`, `df003 c1 bridge_id=adnominal_n`, `bridges_by_id.adnominal_n` 반영 확인
+- df003 bundle 평가 출력에 `span_source_counts={"component_spans": 53, "regex_match_fallback": 1}`가 추가됨을 확인함
+- 직접 detect summary에서 `n_component_span_success=1`, `n_component_span_fallback=0`, `n_component_span_regex_only=0` 출력 확인
+- `git diff --check` 통과
+- `PROJECT_SPEC.md`와 `DECISIONS.md`에 Kiwi 기본 제외 및 예외 검토 원칙을 기록함
 
 ## 다음 작업
 
 1. df003 bundle 기반 DetectorEngine을 뉴스/일상 대화 말뭉치 각 5,000행 batch에 적용하는 corpus search CLI 구현
 2. detection JSONL과 사람 검수용 CSV 형식 재검토
-3. `span_source=regex_match` 후보를 검수표에서 교육적 최종 span으로 오해하지 않도록 표시
-4. 다음 단계에서 component 기반 교육적 span 조립 구현 여부 검토
+3. `component_spans`와 `regex_match_fallback` 후보가 검수표에서 구분되도록 표시
+4. corpus search에서 component fallback 후보가 실제 FP 수집에 어떤 영향을 주는지 확인
 
 ## 주의사항
 
@@ -79,8 +107,8 @@
 - 사람이 만든 gold와 human review 파일은 명시 요청 없이 덮어쓰지 않습니다.
 - 정규식 recall=1은 사람이 만든 gold 50개 기준입니다.
 - 말뭉치 FP를 줄이기 위해 정규식을 수정하더라도 gold recall=1이 깨지면 검색용 정규식으로 확정하지 않습니다.
-- 브릿지는 무조건 채택하지 않고, 넓은 정규식으로 gold recall=1을 확보한 뒤 후보 버전을 만들어 비교합니다.
-- 브릿지 후보는 gold recall=1 유지와 5,000행 말뭉치 FP 감소량을 확인한 뒤, FP 감소 효과가 있거나 span 경계가 좋아질 때만 채택합니다.
+- 브릿지는 무조건 채택하지 않고, 넓은 정규식으로 gold recall=1을 확보한 뒤 후보 버전 또는 `bridge_id` 버전을 만들어 비교합니다.
+- 브릿지 후보는 gold recall=1 유지와 5,000행 말뭉치 FP 감소량을 확인한 뒤, FP 감소 효과가 있거나 span 경계가 좋아질 때만 채택합니다. df003의 `adnominal_n`은 현재 채택되어 있습니다.
 - 뉴스/일상 대화 말뭉치는 우선 각각 5,000행 단위 batch로 검색합니다.
 
 ## 미해결 문제
@@ -88,11 +116,10 @@
 - 사용할 일반 말뭉치 위치와 형식이 아직 확정되지 않았습니다.
 - df003 span 기준은 기존 df003 gold span을 변환해 사용했지만, 최종 교육적 span 정책은 사람이 확인해야 합니다.
 - 뉴스 말뭉치와 일상 대화 말뭉치의 실제 파일 경로, 행 단위 형식, batch offset 관리 방식이 아직 확정되지 않았습니다.
-- 브릿지에 사용할 형태소 분석기 선택, Kiwi 상업 라이선스/속도/정확도, 다른 형태소 분석기 후보 비교가 아직 필요합니다.
-- 문장 단위 형태소 분석 cache를 전체 300개 규칙에 공유할지, 난이도/목표 항목에 따라 필요한 규칙에만 공유할지는 HanTalk 본 시스템 설계 단계에서 다시 결정해야 합니다.
+- 기본 detector 경로는 Kiwi 없이 진행합니다. 다만 문자 기반 bridge로 해결하기 어려운 항목이 나오면 Kiwi 상업 라이선스/속도/정확도 및 다른 형태소 분석기 후보를 비교해야 합니다.
+- 예외적으로 형태소 분석을 쓰게 될 경우 문장 단위 형태소 분석 cache를 전체 300개 규칙에 공유할지, 난이도/목표 항목에 따라 필요한 규칙에만 공유할지는 HanTalk 본 시스템 설계 단계에서 다시 결정해야 합니다.
 - `PROJECT_SPEC.md`의 `향후 detector 설계 검토 메모`는 SSOT가 아니라 비-SSOT 검토 목록입니다. 구현 전 다시 검토해야 합니다.
-- 1차 DetectorEngine의 df003 span은 `적이 있`처럼 regex match span이며, 최종 교육적 span인 `본 적 ... 있`이 아닙니다.
-- `detector_bundle.json` 생성 시 경고 8개가 있습니다. 특히 일부 pattern literal 의심 경고와 몇몇 verify_ruleset_id 누락 경고는 다음 dict 정리 때 확인해야 합니다.
+- df003은 component span 조립이 붙었지만, 일반 말뭉치에서는 `regex_match_fallback` 후보가 FP로 남을 수 있습니다. corpus search 단계에서 이 후보들을 확인해야 합니다.
 - 현재 `detector_bundle.json`은 dict 정리 후 warnings=0으로 생성됩니다.
 
 
@@ -134,7 +161,7 @@
 - `PROJECT_SPEC.md`에 `dict.xlsx` 설계 원칙을 추가함.
 - `detect_rules` 시트는 검색용 표면 정규식 전용으로 두기로 함.
 - 사람이 관리하는 `detect_rules` 시트에서는 `comp_id`, `rule_type`, `engine`을 제거하기로 함.
-- 내부 로더가 `rule_type=surface_regex`, `engine=re`를 자동 보충하도록 향후 구현할 예정임.
+- 내부 로더가 `rule_type=surface_regex`, `engine=re`를 자동 보충하도록 구현됨.
 - `rule_components.comp_id`는 component span 탐색에 필요하므로 유지함.
 
 ## 2026-05-01 items.group 기록
@@ -249,7 +276,7 @@
 - gold recall=1을 유지한 브릿지 후보는 5,000행 말뭉치에서 FP 감소량을 확인하기로 함.
 - FP 감소 효과가 있거나 span 경계가 좋아지면 채택하고, 효과가 작고 복잡도만 늘면 보류하기로 함.
 - `AGENTS.md`, `PROJECT_SPEC.md`, `DECISIONS.md`, `CURRENT_TASK.md`에서 이전 브릿지 채택 표현을 비교 후 채택 원칙으로 수정함.
-- `rg`로 관련 문구를 확인함. 코드 변경은 없으므로 별도 실행 테스트는 하지 않음.
+- 당시에는 `rg`로 관련 문구를 확인함. 코드 변경은 없었으므로 별도 실행 테스트는 하지 않았음.
 - 형태소 분석은 장기적으로 문장 단위 1회 분석 후 token/span/cache를 만들고 필요한 규칙들이 공유하는 구조를 검토하기로 함.
 - 모든 300개 규칙이 항상 공유하는 것이 아니라, 난이도 단계나 목표 문법항목 범위에 따라 필요한 규칙만 공유할 수 있다는 단서를 기록함.
 - Kiwi는 후보 중 하나로 두고, 상업 라이선스, 속도, 정확도, 배포 조건 및 다른 형태소 분석기 가능성을 나중에 반드시 비교하기로 함.
@@ -287,9 +314,9 @@
 
 - `PROJECT_SPEC.md`에 `향후 detector 설계 검토 메모` 섹션을 추가함.
 - 해당 섹션은 SSOT가 아니라 비-SSOT 검토 목록으로 명시함. 프로젝트 초반이라 schema와 구현 방식이 바뀔 수 있으므로, 구현 전 반드시 다시 검토해야 함.
-- 바로 다음 구현 범위는 `src/detector/export_bundle.py`, DetectorEngine 최소형, `src/test_gold.py`의 DetectorEngine 기반 리팩터링으로 제한함.
-- 위 3개를 제외한 나머지 제안은 다음 단계 검토 목록으로 보류함.
-- 보류한 주요 항목: runtime bundle/cache, `group=c` polyset 단위 detect, detect profile, `active_unit_ids`/`teaching_target_e_ids` 분리, `span_segments` 중심 output schema, detection JSONL/review CSV 분리, offline `audit_rules.py`, group=c verify hard_fail 정책.
+- 당시 바로 다음 구현 범위는 `src/detector/export_bundle.py`, DetectorEngine 기반 구현, `src/test_gold.py`의 DetectorEngine 기반 리팩터링으로 제한했음.
+- 이후 runtime bundle, `span_segments` 중심 output schema, component bridge 공용화, df003 component span 조립은 구현 완료됨.
+- 아직 보류 중인 주요 항목: `group=c` polyset 단위 detect, detect profile, `active_unit_ids`/`teaching_target_e_ids` 분리, detection JSONL/review CSV CLI, offline `audit_rules.py`, group=c verify hard_fail 정책.
 - 이 항목들은 당장 확정하지 않지만, corpus search와 HanTalk 실시간 detect를 같은 DetectorEngine 계열로 이어가기 위해 다음 구현 단계에서 반드시 다시 검토함.
 
 ## 2026-05-01 detector bundle 1차 구현
@@ -301,7 +328,7 @@
 - Excel blank/boolean/int/string 값을 runtime JSON에 맞게 normalize하고, JSON 저장 시 `allow_nan=False`를 사용함.
 - DetectorEngine은 bundle 로딩, compiled regex cache, `active_unit_ids`, detect raw_sentence, verify hard_fail raw_sentence/char_window, summary count를 지원함.
 - `char_window.window_chars`는 후보 envelope 기준 좌우 각각 N자로 정의함.
-- 1차 DetectorEngine candidate는 `span_source=regex_match`, `component_span_enabled=false`를 명시함.
+- 1차 DetectorEngine candidate는 당시 `span_source=regex_match`, `component_span_enabled=false`를 명시함. 이후 component span 조립 구현으로 df003은 `span_source=component_spans`를 사용할 수 있게 됨.
 - `src/test_gold.py`는 기존 `regex_versions` 평가 경로를 유지하면서 `--bundle`, `--active-unit-id`, `--bundle-match-policy` 옵션을 추가함.
 - bundle 평가에서는 future-proof하게 `candidate.unit_id == item_id` 또는 `item_id in member_e_ids`를 item match로 처리함.
 - `PROJECT_SPEC.md`와 `DECISIONS.md`에 `dict.xlsx` SSOT/runtime bundle, `span_segments`, 1차 regex_match span 정책을 기록함.
@@ -328,3 +355,11 @@
   - df003 bundle sentence/overlap 평가 모두 `gold_recall=1.0`, `fn_count=0`
   - 기존 regex v1/v2 평가 모두 `gold_recall=1.0`, `fn_count=0`
   - `active_unit_ids` 누락 실행과 `ps_neunde` 기본 실행이 의도대로 `ValueError`를 발생시키는지 확인함.
+
+## 2026-05-01 기준 문서 일관성 정리
+
+- `PROJECT_SPEC.md`에서 현재 기준을 `dict.xlsx`/`detector_bundle.json`/`component_spans` 중심으로 정리함.
+- `configs/grammar_items.yaml`은 장기 SSOT가 아니라 초기 pilot 보조 config로 명시함.
+- corpus search 산출물 schema를 `span_start`/`span_end` 중심 CSV에서 `span_segments` 중심 detection JSONL + review CSV 구조로 교체함.
+- `DECISIONS.md`의 초기 `regex_match` span 결정은 superseded decision으로 표시하고, 현재는 component span 성공 시 `component_spans`, 실패 시 `regex_match_fallback`을 사용한다고 명시함.
+- `CURRENT_TASK.md`의 오래된 미래형 구현 표현과 초기 DetectorEngine 표현을 현재 구현 상태에 맞게 정리함.

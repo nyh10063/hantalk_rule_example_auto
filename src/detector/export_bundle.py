@@ -16,6 +16,11 @@ from typing import Any
 
 from openpyxl import load_workbook
 
+try:
+    from .bridges import BRIDGE_REGISTRY, bridge_metadata_by_id
+except ImportError:  # pragma: no cover - supports direct script execution.
+    from src.detector.bridges import BRIDGE_REGISTRY, bridge_metadata_by_id
+
 SCHEMA_VERSION = "hantalk_detector_bundle_v1"
 
 REQUIRED_SHEETS = {"items", "rule_components", "detect_rules"}
@@ -60,6 +65,7 @@ VALID_TARGETS_BY_STAGE = {
     "detect": {"raw_sentence"},
     "verify": {"raw_sentence", "char_window"},
 }
+VALID_ORDER_POLICIES = {"fx", "fl"}
 
 
 class BundleExportError(ValueError):
@@ -221,10 +227,25 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
         }
 
     components_by_e_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    referenced_bridge_ids: set[str] = set()
     for row_no, row in component_rows:
         e_id = _required_text(row, "e_id", sheet="rule_components", row_no=row_no)
         if e_id not in items_by_e_id:
             raise BundleExportError(f"rule_components:{row_no} e_id not found in items: {e_id}")
+        bridge_id = _text(row.get("bridge_id"))
+        if bridge_id is not None:
+            if bridge_id not in BRIDGE_REGISTRY:
+                known = ", ".join(sorted(BRIDGE_REGISTRY))
+                raise BundleExportError(
+                    f"rule_components:{row_no} unknown bridge_id={bridge_id!r}; known bridge_id values: {known}"
+                )
+            referenced_bridge_ids.add(bridge_id)
+        order_policy = _text(row.get("order_policy"), lower=True) or "fx"
+        if order_policy not in VALID_ORDER_POLICIES:
+            allowed = ", ".join(sorted(VALID_ORDER_POLICIES))
+            raise BundleExportError(
+                f"rule_components:{row_no} order_policy={order_policy!r} invalid; allowed: {allowed}"
+            )
         component = {
             "e_id": e_id,
             "comp_surf": _required_text(row, "comp_surf", sheet="rule_components", row_no=row_no),
@@ -232,9 +253,10 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
             "is_required": _bool_value(row.get("is_required"), sheet="rule_components", row_no=row_no, key="is_required"),
             "anchor_rank": _int_or_none(row.get("anchor_rank"), sheet="rule_components", row_no=row_no, key="anchor_rank"),
             "comp_order": _int_or_none(row.get("comp_order"), sheet="rule_components", row_no=row_no, key="comp_order"),
-            "order_policy": _text(row.get("order_policy"), lower=True),
+            "order_policy": order_policy,
             "min_gap_to_next": _int_or_none(row.get("min_gap_to_next"), sheet="rule_components", row_no=row_no, key="min_gap_to_next"),
             "max_gap_to_next": _int_or_none(row.get("max_gap_to_next"), sheet="rule_components", row_no=row_no, key="max_gap_to_next"),
+            "bridge_id": bridge_id,
         }
         components_by_e_id[e_id].append(component)
 
@@ -368,6 +390,10 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
         },
         "items_by_e_id": dict(sorted(items_by_e_id.items())),
         "components_by_e_id": {e_id: components_by_e_id[e_id] for e_id in sorted(components_by_e_id)},
+        "bridges_by_id": {
+            bridge_id: bridge_metadata_by_id()[bridge_id]
+            for bridge_id in sorted(referenced_bridge_ids)
+        },
         "rules_by_ruleset_id": {ruleset_id: rules_by_ruleset_id[ruleset_id] for ruleset_id in sorted(rules_by_ruleset_id)},
         "polysets_by_id": polysets_by_id,
         "runtime_units": dict(sorted(runtime_units.items())),
