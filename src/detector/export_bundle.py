@@ -63,7 +63,7 @@ VALID_GROUPS = {"a", "b", "c"}
 VALID_STAGES = {"detect", "verify"}
 VALID_TARGETS_BY_STAGE = {
     "detect": {"raw_sentence"},
-    "verify": {"raw_sentence", "char_window"},
+    "verify": {"raw_sentence", "char_window", "component_right_context"},
 }
 VALID_ORDER_POLICIES = {"fx", "fl"}
 
@@ -263,6 +263,11 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
     for components in components_by_e_id.values():
         components.sort(key=lambda item: (item.get("comp_order") is None, item.get("comp_order") or 0, item["comp_id"]))
 
+    component_ids_by_e_id = {
+        e_id: {str(component["comp_id"]) for component in components}
+        for e_id, components in components_by_e_id.items()
+    }
+
     rules_by_ruleset_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
     seen_rule_ids: set[str] = set()
     for row_no, row in rule_rows:
@@ -282,6 +287,22 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
         if target not in VALID_TARGETS_BY_STAGE[stage]:
             allowed = ", ".join(sorted(VALID_TARGETS_BY_STAGE[stage]))
             raise BundleExportError(f"detect_rules:{row_no} target={target!r} invalid for stage={stage}; allowed: {allowed}")
+        component_id = _text(row.get("component_id"))
+        if target == "component_right_context":
+            if component_id is None:
+                raise BundleExportError(
+                    f"detect_rules:{row_no} target=component_right_context requires component_id for rule_id={rule_id}"
+                )
+            if component_id not in component_ids_by_e_id.get(e_id, set()):
+                known = ", ".join(sorted(component_ids_by_e_id.get(e_id, set())))
+                raise BundleExportError(
+                    f"detect_rules:{row_no} component_id={component_id!r} not found in rule_components "
+                    f"for e_id={e_id}; known component_id values: {known}"
+                )
+        elif component_id is not None:
+            warnings.append(
+                f"detect_rules:{row_no} component_id is ignored for target={target} rule_id={rule_id}"
+            )
         pattern = _required_text(row, "pattern", sheet="detect_rules", row_no=row_no)
         try:
             re.compile(pattern)
@@ -303,6 +324,7 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
             "pattern": pattern,
             "priority": _int_or_none(row.get("priority"), sheet="detect_rules", row_no=row_no, key="priority") or 0,
             "hard_fail": hard_fail,
+            "component_id": component_id,
             "rule_type": "surface_regex",
             "engine": "re",
         }

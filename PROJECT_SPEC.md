@@ -358,7 +358,9 @@ engine = re
 - `stage=verify`는 후보를 새로 만들지 않고, 이미 생성된 후보를 제거하는 hard_fail 용도로만 사용합니다.
 - `verify` 규칙은 100% 확실한 오탐일 때만 hard_fail을 발생시킵니다.
 - `stage=detect`인 규칙의 `target`은 항상 `raw_sentence`여야 합니다.
-- `stage=verify`인 규칙의 `target`은 `raw_sentence` 또는 `char_window`만 허용합니다.
+- `stage=verify`인 규칙의 `target`은 `raw_sentence`, `char_window`, `component_right_context`를 허용합니다.
+- `target=component_right_context`는 candidate 안의 특정 component span 바로 오른쪽 문자열만 검증합니다. 이 target을 쓰는 rule은 `component_id`를 반드시 지정해야 합니다.
+- `component_right_context`에서 해당 `component_id`의 span을 찾지 못하면, recall 보호를 위해 그 verify rule은 적용하지 않고 candidate를 유지합니다.
 - 이전 프로젝트 코드의 `token_window`는 실제로 토큰 단위가 아니라 문자 단위 후보 주변 window이므로, 새 규칙 모듈을 만들 때 `char_window`로 이름을 바꿉니다.
 - 같은 `stage` 안에서는 `priority`가 작은 규칙부터 실행합니다.
 - `priority`의 숫자가 작을수록 더 강한 우선순위를 가집니다.
@@ -389,12 +391,15 @@ DetectorEngine 현재 구현 범위:
 - `active_unit_ids` 기준 runtime unit 선택
 - `stage=detect`, `target=raw_sentence` 표면 정규식 실행
 - detect regex match 이후 `rule_components` 기반 component span 조립
-- `stage=verify`, `target=raw_sentence` 또는 `target=char_window` hard_fail 최소 구현
+- `stage=verify`, `target=raw_sentence`, `target=char_window`, `target=component_right_context` hard_fail 최소 구현
 - candidate span을 `span_segments`로 출력
 
 DetectorEngine 실행 안전장치:
 
 - Phase 1에서는 `active_unit_ids`를 반드시 명시합니다.
+- DetectorEngine 실행 정책은 크게 `offline`과 `realtime` 두 가지로만 구분합니다.
+- `offline`은 기본값이며 gold 평가, corpus search, audit, 예문 구축에 사용합니다.
+- `realtime`은 실제 사용자 발화 처리에 사용하며, `regex_match_fallback` 후보와 rejected/partial/debug 보조 정보를 최종 출력에서 숨깁니다.
 - 전체 runtime unit 실행은 `allow_all=True`를 명시한 경우에만 허용합니다.
 - `group=c` polyset runtime unit은 아직 실험 단계이므로 기본 실행을 막습니다.
 - polyset unit은 명시적 실험에서 `allow_experimental_polyset=True`를 넘긴 경우에만 실행합니다.
@@ -414,6 +419,9 @@ DetectorEngine span 정책:
 - candidate에는 원래 detect regex가 잡은 `regex_match_span`, `regex_match_text`를 보존합니다.
 - component span 조립이 성공하면 `span_source=component_spans`, `component_span_enabled=true`로 기록합니다.
 - component span 조립이 실패하면 후보를 버리지 않고 `span_source=regex_match_fallback`으로 유지합니다. 이는 gold recall 보호를 위한 fallback입니다.
+- component 일부만 찾은 경우에는 `partial_component_spans`, `partial_span_segments`, `partial_span_text`, `matched_component_ids`, `missing_required_component_ids`를 보조 정보로 기록할 수 있습니다.
+- partial component span은 검수, 오류 분석, component 단위 verify rule에 쓰는 보조 정보이며 canonical span으로 승격하지 않습니다.
+- 따라서 full component path가 성공한 경우에만 `span_source=component_spans`이고, 실패한 경우의 canonical `span_segments`는 계속 regex fallback span입니다.
 - `origin_e_id`는 component lookup 기준입니다. group=c polyset 확장 시 `unit_id`와 `origin_e_id`가 달라질 수 있으므로 지금부터 보존합니다.
 
 Component bridge 원칙:
@@ -456,6 +464,8 @@ span_end
 
 `char_window`의 `window_chars`는 후보 span envelope 기준 좌우 각각 N자를 뜻합니다.
 
+`component_right_context`의 `window_chars`는 지정한 component span 끝 위치 기준 오른쪽 N자를 뜻합니다. 예를 들어 df003의 `component_id=c2`는 실제 선택된 `적` component를 가리키며, `pattern=^\s*(?:으로|인|일|에)`는 그 `적` 바로 뒤가 `으로`, `인`, `일`, `에`일 때만 hard fail을 발생시킵니다. 이 target은 먼저 full `component_spans[component_id]`를 보고, 없으면 보조 정보인 `partial_component_spans[component_id]`를 봅니다. 둘 다 없으면 recall 보호를 위해 해당 verify rule을 skip합니다.
+
 `export_bundle.py` validation 원칙:
 
 - regex compile 실패는 fatal error입니다.
@@ -476,6 +486,21 @@ span_end
 ```text
 configs/corpus/example_making_manifest.json
 ```
+
+현재 정규식 다듬기 및 예문 제작용 통합 말뭉치 폴더는 아래 Git 제외 경로입니다.
+
+```text
+/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making
+```
+
+현재 `example_making_manifest.json`이 참조하는 통합 입력 파일은 아래 네 개입니다.
+
+| corpus_domain | 파일명 |
+| --- | --- |
+| `daily_conversation` | `일상대화말뭉치(2023_2024).txt` |
+| `news` | `신문말뭉치(2024).txt` |
+| `non_published` | `비출판물말뭉치.txt` |
+| `learner_spoken_5_6` | `학습자말뭉치(구어_5_6급).txt` |
 
 현재 batch 구성:
 
@@ -535,6 +560,7 @@ python3 -m src.search_corpus \
 - `--active-unit-id`는 여러 번 줄 수 있습니다. Phase 1 실행은 우선 `df003` 하나로 합니다.
 - detection JSONL은 hit가 있는 문장만 저장합니다.
 - human review CSV는 candidate 하나를 한 행으로 펼쳐 사람이 `human_label`, `span_status`, `corrected_span_segments`, `memo`, `reviewer`를 채울 수 있게 합니다.
+- 검수 편의를 위해 `raw_text`, `regex_match_text`, `human_label` 열을 서로 붙여 배치합니다.
 - LLM 검수 보조를 붙일 가능성에 대비해 `llm_temp_label`, `llm_note` 열을 비워 둡니다. 이 값은 최종 라벨이 아니라 임시 참고용입니다.
 - human review CSV는 Excel에서 한국어가 깨지지 않도록 `utf-8-sig`로 저장합니다.
 - review CSV는 `span_segments`, `span_key`, `span_text`, `span_source`, `component_span_status`, `applied_bridge_ids`, `detect_rule_ids`를 포함합니다.
@@ -643,6 +669,11 @@ span_key
 span_text
 span_source
 component_span_status
+partial_span_text
+matched_component_ids
+missing_required_component_ids
+partial_component_spans
+partial_span_segments
 detect_rule_ids
 hard_fail_rule_ids
 llm_temp_label

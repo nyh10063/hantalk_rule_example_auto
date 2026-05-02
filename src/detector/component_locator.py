@@ -114,16 +114,22 @@ class ComponentLocator:
             )
             candidates_by_comp[comp_id] = candidates
             debug["candidate_counts"][comp_id] = len(candidates)
-            if not candidates:
-                result = {
-                    "ok": False,
-                    "reason": "missing_required_component",
-                    "failed_required_comp_ids": [comp_id],
-                    "component_span_enabled": False,
-                }
-                if include_debug:
-                    result["component_debug"] = debug
-                return result
+
+        missing_required_comp_ids = [
+            str(component["comp_id"])
+            for component in components
+            if not candidates_by_comp.get(str(component["comp_id"]))
+        ]
+        if missing_required_comp_ids:
+            return self._partial_result(
+                raw_text=raw_text,
+                components=components,
+                candidates_by_comp=candidates_by_comp,
+                reason="partial_required_components",
+                failed_required_comp_ids=missing_required_comp_ids,
+                debug=debug,
+                include_debug=include_debug,
+            )
 
         component_orders = self._component_orders(components)
         debug["component_orders"] = [
@@ -139,14 +145,15 @@ class ComponentLocator:
         debug["paths_considered"] = paths_considered
         debug["paths_truncated"] = truncated
         if path is None:
-            result = {
-                "ok": False,
-                "reason": "no_ordered_component_path",
-                "component_span_enabled": False,
-            }
-            if include_debug:
-                result["component_debug"] = debug
-            return result
+            return self._partial_result(
+                raw_text=raw_text,
+                components=components,
+                candidates_by_comp=candidates_by_comp,
+                reason="no_ordered_component_path",
+                failed_required_comp_ids=[],
+                debug=debug,
+                include_debug=include_debug,
+            )
 
         component_spans = {candidate.comp_id: candidate.span for candidate in path}
         span_segments = self._merge_component_spans(raw_text, [candidate.span for candidate in path])
@@ -165,6 +172,81 @@ class ComponentLocator:
         }
         if include_debug:
             debug["selected_component_spans"] = component_spans
+            result["component_debug"] = debug
+        return result
+
+    def _partial_result(
+        self,
+        *,
+        raw_text: str,
+        components: list[dict[str, Any]],
+        candidates_by_comp: dict[str, list[ComponentCandidate]],
+        reason: str,
+        failed_required_comp_ids: list[str],
+        debug: dict[str, Any],
+        include_debug: bool,
+    ) -> dict[str, Any]:
+        """Return auxiliary partial component spans without promoting them.
+
+        Partial spans are useful for review/audit and for component-scoped
+        verify rules, but they are not canonical candidate spans.
+        """
+        partial_candidates: list[ComponentCandidate] = []
+        for component in components:
+            comp_id = str(component["comp_id"])
+            candidates = candidates_by_comp.get(comp_id) or []
+            if candidates:
+                partial_candidates.append(candidates[0])
+
+        partial_component_spans = {
+            candidate.comp_id: candidate.span for candidate in partial_candidates
+        }
+        matched_component_ids = [candidate.comp_id for candidate in partial_candidates]
+        missing_component_ids = [
+            str(component["comp_id"])
+            for component in components
+            if str(component["comp_id"]) not in partial_component_spans
+        ]
+        status = reason if partial_candidates else "missing_required_component"
+        result: dict[str, Any] = {
+            "ok": False,
+            "reason": reason,
+            "component_span_enabled": False,
+            "component_span_status": status,
+            "matched_component_ids": matched_component_ids,
+            "missing_required_component_ids": missing_component_ids,
+            "failed_required_comp_ids": failed_required_comp_ids,
+            "partial_component_spans": partial_component_spans,
+            "partial_span_segments": [],
+            "partial_span_key": "",
+            "partial_span_text": "",
+            "partial_applied_bridge_ids": sorted(
+                {candidate.bridge_id for candidate in partial_candidates if candidate.bridge_id}
+            ),
+        }
+
+        if partial_candidates:
+            try:
+                partial_span_segments = self._merge_component_spans(
+                    raw_text,
+                    [candidate.span for candidate in partial_candidates],
+                )
+                partial_span_segments = validate_span_segments(raw_text, partial_span_segments)
+                result["partial_span_segments"] = partial_span_segments
+                result["partial_span_key"] = make_span_key(partial_span_segments)
+                result["partial_span_text"] = make_span_text(
+                    raw_text,
+                    partial_span_segments,
+                    gap_marker=DEFAULT_GAP_MARKER,
+                )
+            except ValueError as exc:
+                result["partial_span_status"] = "invalid_partial_segments"
+                result["partial_span_error"] = str(exc)
+
+        if include_debug:
+            debug["partial_component_spans"] = partial_component_spans
+            debug["matched_component_ids"] = matched_component_ids
+            debug["missing_required_component_ids"] = missing_component_ids
             result["component_debug"] = debug
         return result
 

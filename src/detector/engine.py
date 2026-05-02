@@ -56,12 +56,15 @@ class DetectorEngine:
         window_chars: int = 20,
         component_window_chars: int = 20,
         include_debug: bool = False,
+        realtime: bool = False,
     ) -> dict[str, Any]:
         """Detect grammar candidates in raw_text.
 
         active_unit_ids controls which runtime units are executed. In Phase 1,
         df003 item-unit detection is the supported/tested path.
         """
+        if realtime:
+            include_debug = False
         units = self._select_units(
             active_unit_ids,
             allow_all=allow_all,
@@ -125,6 +128,17 @@ class DetectorEngine:
                 continue
             kept_candidates.append(candidate)
 
+        hidden_realtime_count = 0
+        if realtime:
+            visible_candidates: list[dict[str, Any]] = []
+            for candidate in kept_candidates:
+                if candidate.get("span_source") == "regex_match_fallback":
+                    hidden_realtime_count += 1
+                    continue
+                visible_candidates.append(self._strip_realtime_fields(candidate))
+            kept_candidates = visible_candidates
+            rejected_candidates = []
+
         component_summary = self._component_span_summary(kept_candidates)
         component_summary_before_verify = self._component_span_summary(merged_candidates)
 
@@ -143,6 +157,8 @@ class DetectorEngine:
                 "n_candidates_hard_failed": hard_fail_count,
                 "n_matches_truncated": truncated_match_count,
                 "truncated_rules": truncated_rules,
+                "n_candidates_hidden_realtime": hidden_realtime_count,
+                "realtime": realtime,
                 "n_component_span_success": component_summary["component_spans"],
                 "n_component_span_fallback": component_summary["regex_match_fallback"],
                 "n_component_span_regex_only": component_summary["regex_match"],
@@ -208,14 +224,24 @@ class DetectorEngine:
             component_span_enabled = True
             component_span_status = "ok"
             component_spans = component_result.get("component_spans") or {}
+            partial_component_spans = {}
+            partial_span_segments: list[list[int]] = []
+            partial_span_text = ""
+            matched_component_ids = sorted(component_spans)
+            missing_required_component_ids: list[str] = []
             applied_bridge_ids = component_result.get("applied_bridge_ids") or []
         else:
             span_segments = regex_span_segments
             reason = str(component_result.get("reason") or "component_span_not_available")
             span_source = "regex_match" if reason == "no_components" else "regex_match_fallback"
             component_span_enabled = False
-            component_span_status = reason
+            component_span_status = str(component_result.get("component_span_status") or reason)
             component_spans = {}
+            partial_component_spans = component_result.get("partial_component_spans") or {}
+            partial_span_segments = component_result.get("partial_span_segments") or []
+            partial_span_text = str(component_result.get("partial_span_text") or "")
+            matched_component_ids = list(component_result.get("matched_component_ids") or [])
+            missing_required_component_ids = list(component_result.get("missing_required_component_ids") or [])
             applied_bridge_ids = []
 
         candidate = {
@@ -234,6 +260,12 @@ class DetectorEngine:
             "component_span_enabled": component_span_enabled,
             "component_span_status": component_span_status,
             "component_spans": component_spans,
+            "partial_component_spans": partial_component_spans,
+            "partial_span_segments": partial_span_segments,
+            "partial_span_key": str(component_result.get("partial_span_key") or ""),
+            "partial_span_text": partial_span_text,
+            "matched_component_ids": matched_component_ids,
+            "missing_required_component_ids": missing_required_component_ids,
             "applied_bridge_ids": applied_bridge_ids,
             "detect_ruleset_ids": list(unit.get("detect_ruleset_ids") or []),
             "verify_ruleset_ids": list(unit.get("verify_ruleset_ids") or []),
@@ -270,10 +302,61 @@ class DetectorEngine:
                 haystack = raw_text
                 if rule.get("target") == "char_window":
                     haystack = str(make_char_window(raw_text, candidate["span_segments"], window_chars=window_chars)["text"])
+                elif rule.get("target") == "component_right_context":
+                    haystack = self._component_right_context(
+                        raw_text=raw_text,
+                        candidate=candidate,
+                        rule=rule,
+                        window_chars=window_chars,
+                    )
+                    if haystack is None:
+                        continue
                 pattern = self._compiled_rules[rule["rule_id"]]
                 if pattern.search(haystack):
                     hard_fail_rule_ids.append(rule["rule_id"])
         return hard_fail_rule_ids
+
+    @staticmethod
+    def _component_right_context(
+        *,
+        raw_text: str,
+        candidate: dict[str, Any],
+        rule: dict[str, Any],
+        window_chars: int,
+    ) -> str | None:
+        """Return text to the right of a selected component span.
+
+        If the candidate has no component span for the requested component_id,
+        the verify rule is skipped to protect recall.
+        """
+        component_id = rule.get("component_id")
+        if not component_id:
+            return None
+        component_spans = candidate.get("component_spans") or {}
+        span = component_spans.get(str(component_id))
+        if not span:
+            partial_component_spans = candidate.get("partial_component_spans") or {}
+            span = partial_component_spans.get(str(component_id))
+        if not span or len(span) != 2:
+            return None
+        component_end = int(span[1])
+        return raw_text[component_end : min(len(raw_text), component_end + window_chars)]
+
+    @staticmethod
+    def _strip_realtime_fields(candidate: dict[str, Any]) -> dict[str, Any]:
+        """Hide offline-only analysis fields from realtime output."""
+        stripped = dict(candidate)
+        for key in [
+            "partial_component_spans",
+            "partial_span_segments",
+            "partial_span_key",
+            "partial_span_text",
+            "matched_component_ids",
+            "missing_required_component_ids",
+            "component_debug",
+        ]:
+            stripped.pop(key, None)
+        return stripped
 
     @staticmethod
     def _component_span_summary(candidates: list[dict[str, Any]]) -> dict[str, int]:

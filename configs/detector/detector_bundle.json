@@ -2,8 +2,8 @@
   "schema_version": "hantalk_detector_bundle_v1",
   "source": {
     "dict_xlsx": "datasets/dict/dict.xlsx",
-    "source_sha256": "1a29e7b59ced15cd7b04a5091c9a04f747a6387af879ec1751cb1075d17907b0",
-    "generated_at": "2026-05-02T04:59:30.369178+00:00"
+    "source_sha256": "cdbdff57f95474dcf48e5e8b736e0106857a95a5b3916bb83d11ae97ce50d203",
+    "generated_at": "2026-05-02T07:32:02.909787+00:00"
   },
   "items_by_e_id": {
     "ce001": {
@@ -65,7 +65,7 @@
         "c3"
       ],
       "detect_ruleset_id": "rs_df003_d01",
-      "verify_ruleset_id": null,
+      "verify_ruleset_id": "rs_df003_v01",
       "gloss": "어떤 행위나 상태를 해 본 경험이 있거나 없음을 나타냄."
     },
     "df004": {
@@ -199,7 +199,7 @@
         "comp_order": 1,
         "order_policy": "fx",
         "min_gap_to_next": 0,
-        "max_gap_to_next": 6,
+        "max_gap_to_next": 1,
         "bridge_id": "adnominal_n"
       },
       {
@@ -211,7 +211,7 @@
         "comp_order": 2,
         "order_policy": "fx",
         "min_gap_to_next": 0,
-        "max_gap_to_next": 13,
+        "max_gap_to_next": 12,
         "bridge_id": null
       },
       {
@@ -341,6 +341,7 @@
         "pattern": "(?:는다면|ㄴ다면|다면)",
         "priority": 10,
         "hard_fail": false,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       }
@@ -355,6 +356,7 @@
         "pattern": "(?:다면서|다\\s*면서)",
         "priority": 5,
         "hard_fail": true,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       }
@@ -369,6 +371,7 @@
         "pattern": "(?:[간갠갼걘건겐견곈곤관괜괸굔군권궨귄균근긘긴깐깬꺈꺤껀껜껸꼔꼰꽌꽨꾄꾠꾼꿘꿴뀐뀬끈끤낀난낸냔냰넌넨년녠논놘놴뇐뇬눈눤뉀뉜뉸는늰닌단댄댠댼던덴뎐뎬돈돤됀된됸둔둰뒌뒨듄든듼딘딴땐땬떈떤뗀뗜뗸똔똰뙌뙨뚄뚠뚼뛘뛴뜐뜬띈띤란랜랸럔런렌련롄론롼뢘뢴룐룬뤈뤤륀륜른린만맨먄먠먼멘면몐몬뫈뫤묀묜문뭔뭰뮌뮨믄믠민반밴뱐뱬번벤변볜본봔봰뵌뵨분붠붼뷘뷴븐븬빈빤뺀뺜뺸뻔뻰뼌뼨뽄뽠뽼뾘뾴뿐뿬쀈쀤쁀쁜쁸삔산샌샨섄선센션셴손솬쇈쇤숀순숸쉔쉰슌슨싄신싼쌘쌴썐썬쎈쎤쏀쏜쏸쐔쐰쑌쑨쒄쒠쒼쓘쓴씐씬안앤얀얜언엔연옌온완왠왼욘운원웬윈윤은읜인잔잰쟌쟨전젠젼졘존좐좬죈죤준줜줸쥔쥰즌즨진짠짼쨘쨴쩐쩬쪈쪤쫀쫜쫸쬔쬰쭌쭨쮄쮠쮼쯘쯴찐찬챈챤첀천첸쳔쳰촌촨쵄쵠쵼춘춴췐췬츈츤칀친칸캔캰컌컨켄켠켼콘콴쾐쾬쿈쿤퀀퀜퀸큔큰킌킨탄탠탼턘턴텐텬톈톤퇀퇜퇸툔툰퉌퉨튄튠튼틘틴판팬퍈퍤펀펜편폔폰퐌퐨푄푠푼풘풴퓐퓬픈픤핀한핸햔햰헌헨현혠혼환홴횐횬훈훤휀휜휸흔흰힌]|[ㄴ]|는)데(?:요)?(?![.?!~…]+)",
         "priority": 10,
         "hard_fail": false,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       },
@@ -381,6 +384,7 @@
         "pattern": "(?:[간갠갼걘건겐견곈곤관괜괸굔군권궨귄균근긘긴깐깬꺈꺤껀껜껸꼔꼰꽌꽨꾄꾠꾼꿘꿴뀐뀬끈끤낀난낸냔냰넌넨년녠논놘놴뇐뇬눈눤뉀뉜뉸는늰닌단댄댠댼던덴뎐뎬돈돤됀된됸둔둰뒌뒨듄든듼딘딴땐땬떈떤뗀뗜뗸똔똰뙌뙨뚄뚠뚼뛘뛴뜐뜬띈띤란랜랸럔런렌련롄론롼뢘뢴룐룬뤈뤤륀륜른린만맨먄먠먼멘면몐몬뫈뫤묀묜문뭔뭰뮌뮨믄믠민반밴뱐뱬번벤변볜본봔봰뵌뵨분붠붼뷘뷴븐븬빈빤뺀뺜뺸뻔뻰뼌뼨뽄뽠뽼뾘뾴뿐뿬쀈쀤쁀쁜쁸삔산샌샨섄선센션셴손솬쇈쇤숀순숸쉔쉰슌슨싄신싼쌘쌴썐썬쎈쎤쏀쏜쏸쐔쐰쑌쑨쒄쒠쒼쓘쓴씐씬안앤얀얜언엔연옌온완왠왼욘운원웬윈윤은읜인잔잰쟌쟨전젠젼졘존좐좬죈죤준줜줸쥔쥰즌즨진짠짼쨘쨴쩐쩬쪈쪤쫀쫜쫸쬔쬰쭌쭨쮄쮠쮼쯘쯴찐찬챈챤첀천첸쳔쳰촌촨쵄쵠쵼춘춴췐췬츈츤칀친칸캔캰컌컨켄켠켼콘콴쾐쾬쿈쿤퀀퀜퀸큔큰킌킨탄탠탼턘턴텐텬톈톤퇀퇜퇸툔툰퉌퉨튄튠튼틘틴판팬퍈퍤펀펜편폔폰퐌퐨푄푠푼풘풴퓐퓬픈픤핀한핸햔햰헌헨현혠혼환홴횐횬훈훤휀휜휸흔흰힌]|[ㄴ]|는)데(?:요)?(?![.?!~…]+)",
         "priority": 20,
         "hard_fail": false,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       }
@@ -395,6 +399,7 @@
         "pattern": "(?:가운데|그런데|군데|데다가|[펜엔]데믹)",
         "priority": 5,
         "hard_fail": true,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       },
@@ -407,6 +412,7 @@
         "pattern": "(?:^|[^가-힣])운데(?:$|[^가-힣])",
         "priority": 6,
         "hard_fail": true,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       },
@@ -419,6 +425,7 @@
         "pattern": "(?:는데다가|는\\s*데다가|데다가)",
         "priority": 50,
         "hard_fail": true,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       }
@@ -433,6 +440,7 @@
         "pattern": "(?:[간갠갼걘건겐견곈곤관괜괸굔군권궨귄균근긘긴깐깬꺈꺤껀껜껸꼔꼰꽌꽨꾄꾠꾼꿘꿴뀐뀬끈끤낀난낸냔냰넌넨년녠논놘놴뇐뇬눈눤뉀뉜뉸는늰닌단댄댠댼던덴뎐뎬돈돤됀된됸둔둰뒌뒨듄든듼딘딴땐땬떈떤뗀뗜뗸똔똰뙌뙨뚄뚠뚼뛘뛴뜐뜬띈띤란랜랸럔런렌련롄론롼뢘뢴룐룬뤈뤤륀륜른린만맨먄먠먼멘면몐몬뫈뫤묀묜문뭔뭰뮌뮨믄믠민반밴뱐뱬번벤변볜본봔봰뵌뵨분붠붼뷘뷴븐븬빈빤뺀뺜뺸뻔뻰뼌뼨뽄뽠뽼뾘뾴뿐뿬쀈쀤쁀쁜쁸삔산샌샨섄선센션셴손솬쇈쇤숀순숸쉔쉰슌슨싄신싼쌘쌴썐썬쎈쎤쏀쏜쏸쐔쐰쑌쑨쒄쒠쒼쓘쓴씐씬안앤얀얜언엔연옌온완왠왼욘운원웬윈윤은읜인잔잰쟌쟨전젠젼졘존좐좬죈죤준줜줸쥔쥰즌즨진짠짼쨘쨴쩐쩬쪈쪤쫀쫜쫸쬔쬰쭌쭨쮄쮠쮼쯘쯴찐찬챈챤첀천첸쳔쳰촌촨쵄쵠쵼춘춴췐췬츈츤칀친칸캔캰컌컨켄켠켼콘콴쾐쾬쿈쿤퀀퀜퀸큔큰킌킨탄탠탼턘턴텐텬톈톤퇀퇜퇸툔툰퉌퉨튄튠튼틘틴판팬퍈퍤펀펜편폔폰퐌퐨푄푠푼풘풴퓐퓬픈픤핀한핸햔햰헌헨현혠혼환홴횐횬훈훤휀휜휸흔흰힌]|[ㄴ]|는)데(?:요)?(?![.?!~…]+)",
         "priority": 10,
         "hard_fail": false,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       },
@@ -445,6 +453,7 @@
         "pattern": "(?:[간갠갼걘건겐견곈곤관괜괸굔군권궨귄균근긘긴깐깬꺈꺤껀껜껸꼔꼰꽌꽨꾄꾠꾼꿘꿴뀐뀬끈끤낀난낸냔냰넌넨년녠논놘놴뇐뇬눈눤뉀뉜뉸는늰닌단댄댠댼던덴뎐뎬돈돤됀된됸둔둰뒌뒨듄든듼딘딴땐땬떈떤뗀뗜뗸똔똰뙌뙨뚄뚠뚼뛘뛴뜐뜬띈띤란랜랸럔런렌련롄론롼뢘뢴룐룬뤈뤤륀륜른린만맨먄먠먼멘면몐몬뫈뫤묀묜문뭔뭰뮌뮨믄믠민반밴뱐뱬번벤변볜본봔봰뵌뵨분붠붼뷘뷴븐븬빈빤뺀뺜뺸뻔뻰뼌뼨뽄뽠뽼뾘뾴뿐뿬쀈쀤쁀쁜쁸삔산샌샨섄선센션셴손솬쇈쇤숀순숸쉔쉰슌슨싄신싼쌘쌴썐썬쎈쎤쏀쏜쏸쐔쐰쑌쑨쒄쒠쒼쓘쓴씐씬안앤얀얜언엔연옌온완왠왼욘운원웬윈윤은읜인잔잰쟌쟨전젠젼졘존좐좬죈죤준줜줸쥔쥰즌즨진짠짼쨘쨴쩐쩬쪈쪤쫀쫜쫸쬔쬰쭌쭨쮄쮠쮼쯘쯴찐찬챈챤첀천첸쳔쳰촌촨쵄쵠쵼춘춴췐췬츈츤칀친칸캔캰컌컨켄켠켼콘콴쾐쾬쿈쿤퀀퀜퀸큔큰킌킨탄탠탼턘턴텐텬톈톤퇀퇜퇸툔툰퉌퉨튄튠튼틘틴판팬퍈퍤펀펜편폔폰퐌퐨푄푠푼풘풴퓐퓬픈픤핀한핸햔햰헌헨현혠혼환홴횐횬훈훤휀휜휸흔흰힌]|[ㄴ]|는)데(?:요)?(?![.?!~…]+)",
         "priority": 20,
         "hard_fail": false,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       }
@@ -459,6 +468,7 @@
         "pattern": "(?:가운데|그런데|군데|데다가|[펜엔]데믹)",
         "priority": 5,
         "hard_fail": true,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       },
@@ -471,6 +481,7 @@
         "pattern": "(?:^|[^가-힣])운데(?:$|[^가-힣])",
         "priority": 6,
         "hard_fail": true,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       },
@@ -483,6 +494,7 @@
         "pattern": "(?:는데다가|는\\s*데다가|데다가)",
         "priority": 50,
         "hard_fail": true,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       }
@@ -497,6 +509,22 @@
         "pattern": "적(?:\\s*(?:이|가|은|는|도|만|조차|까지))?[^\\n]{0,200}?(?:있|없)",
         "priority": 10,
         "hard_fail": false,
+        "component_id": null,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      }
+    ],
+    "rs_df003_v01": [
+      {
+        "e_id": "df003",
+        "ruleset_id": "rs_df003_v01",
+        "rule_id": "r_df003_v01",
+        "stage": "verify",
+        "target": "component_right_context",
+        "pattern": "^\\s*(?:으로|인|일|에)",
+        "priority": 5,
+        "hard_fail": true,
+        "component_id": "c2",
         "rule_type": "surface_regex",
         "engine": "re"
       }
@@ -511,6 +539,7 @@
         "pattern": "고(?!\\s*정말)(?!\\s*,)[^\\n]{0,2}?(?<!연)(?<!월)(?<!주)(?<!아무)(?<!회)(?<!반)(?<!막)(?<!고추 )말(?!\\s*(?:실수|다툼|싸움|보다|했|할|하|씀|해|한|함|을|은|이|에|도|만|들|끝|문|풍선|렸|릴|리|린|려|미|수|로|소|라|고|자|바))(?!(?:실수|다툼|싸움|보다|했|할|하|씀|해|한|함|을|은|이|에|도|만|들|끝|문|풍선|렸|릴|리|린|려|미|수|로|소|라|고|자|바))",
         "priority": 10,
         "hard_fail": false,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       }
@@ -525,6 +554,7 @@
         "pattern": "고(?!\\s*정말)(?!\\s*,)[^\\n]{0,2}?(?<!연)(?<!월)(?<!주)(?<!아무)(?<!회)(?<!반)(?<!막)(?<!고추 )말(?!\\s*(?:실수|다툼|싸움|보다|했|할|하|씀|해|한|함|을|은|이|에|도|만|들|끝|문|풍선|렸|릴|리|린|려|미|수|로|소|라|고|자|바))(?!(?:실수|다툼|싸움|보다|했|할|하|씀|해|한|함|을|은|이|에|도|만|들|끝|문|풍선|렸|릴|리|린|려|미|수|로|소|라|고|자|바))",
         "priority": 10,
         "hard_fail": false,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       }
@@ -539,6 +569,7 @@
         "pattern": "까지",
         "priority": 10,
         "hard_fail": false,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       },
@@ -551,6 +582,7 @@
         "pattern": "까\\s*지",
         "priority": 20,
         "hard_fail": false,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       }
@@ -565,6 +597,7 @@
         "pattern": "까지",
         "priority": 10,
         "hard_fail": false,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       },
@@ -577,6 +610,7 @@
         "pattern": "까\\s*지",
         "priority": 20,
         "hard_fail": false,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       }
@@ -591,6 +625,7 @@
         "pattern": "까지",
         "priority": 10,
         "hard_fail": false,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       },
@@ -603,6 +638,7 @@
         "pattern": "까\\s*지",
         "priority": 20,
         "hard_fail": false,
+        "component_id": null,
         "rule_type": "surface_regex",
         "engine": "re"
       }
@@ -662,7 +698,9 @@
       "detect_ruleset_ids": [
         "rs_df003_d01"
       ],
-      "verify_ruleset_ids": []
+      "verify_ruleset_ids": [
+        "rs_df003_v01"
+      ]
     },
     "ps_go_mal": {
       "unit_id": "ps_go_mal",

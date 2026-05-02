@@ -5,7 +5,7 @@
 - Current phase: Phase 1 pilot
 - Current item: df003 `ㄴ/은 적 있/없`
 - Current project goal: 300개 문법항목의 검색용 정규식 및 오탐 필터링 인코더용 positive/negative 예문 구축 자동화
-- Current immediate goal: df003 component span 조립이 붙은 DetectorEngine 결과를 공통 prepared corpus batch에 적용하고, 사람이 TP/FP/span을 검수할 CSV를 생성하기
+- Current immediate goal: df003 corpus search 후보 180개를 사람이 TP/FP/span 검수하고, 남은 FP 유형을 분석하기
 
 ## 현재까지 완료
 
@@ -82,6 +82,7 @@
   - 여러 `--active-unit-id`를 받을 수 있게 구현함
   - 사람 검수용 CSV에 `llm_temp_label`, `llm_note` 빈 열을 추가함
   - 사람 검수용 CSV를 Excel 호환성을 위해 `utf-8-sig`로 저장하도록 수정함
+  - 검수 편의를 위해 CSV 열 순서를 `raw_text`, `regex_match_text`, `human_label`이 붙어 보이도록 조정함
 - 예문 구축용 batch 비율을 일상대화 5,000행, 뉴스 2,000행, 비출판물 2,000행, 학습자 말뭉치 1,000행으로 적용함
 - 공통 prepared corpus batch 생성 완료:
   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_000.jsonl`
@@ -90,6 +91,28 @@
   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_detection.jsonl`
   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_human_review.csv`
   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_search_report.json`
+- `dict.xlsx`에 df003 verify hard_fail rule `r_df003_v01`을 추가한 뒤 bundle을 다시 export하고 corpus search를 다시 실행함
+- `r_df003_v01`은 `char_window` 방식에서 gold recall을 깨뜨렸으므로 `component_right_context` 방식으로 수정함
+- `detect_rules` 시트에 optional `component_id` 열을 추가하고, df003 verify rule은 `component_id=c2`를 사용하도록 수정함
+- `src/detector/export_bundle.py`가 `component_right_context`와 `component_id`를 읽고 검증하도록 수정함
+- `src/detector/engine.py`가 candidate의 `component_spans[component_id]` 오른쪽 context만 hard fail 검증하도록 수정함
+- 최신 df003 human review Excel 산출물을 생성함:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_human_review.xlsx`
+- component span 조립 실패 시에도 부분 component 정보를 보조 필드로 남기도록 수정함
+  - `partial_component_spans`
+  - `partial_span_segments`
+  - `partial_span_text`
+  - `matched_component_ids`
+  - `missing_required_component_ids`
+- `component_right_context` verify가 full `component_spans`를 먼저 보고, 없으면 `partial_component_spans`를 참고하도록 수정함
+- DetectorEngine에 `realtime` 실행 옵션을 추가함
+  - 기본값 `realtime=False`는 gold 평가, corpus search, audit, 예문 구축용 offline 동작임
+  - `realtime=True`에서는 `regex_match_fallback` 후보와 rejected/partial/debug 보조 정보를 최종 출력에서 숨김
+- 사람 검수용 CSV에 partial component 보조 정보 열을 추가함
+- partial component 기반 verify 적용 후 df003 corpus search 산출물을 다시 생성함
+- 최신 df003 human review Excel 산출물을 다시 생성함:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_000_human_review.xlsx`
+- 정규식 다듬기 및 예문 제작용 통합 말뭉치 root와 네 입력 파일명을 `PROJECT_SPEC.md`에 명시함
 
 ## 이번에 테스트한 것
 
@@ -168,13 +191,51 @@
   - elapsed: 약 0.13초
 - `df003_batch_000_human_review.csv`에 307개 후보 행이 생성되고, 사람이 채울 `human_label`, `span_status`, `memo`, `reviewer` 열이 포함됨을 확인함
 - `/private/tmp/hantalk_sample_20_review.csv` 샘플 실행으로 review CSV가 UTF-8 BOM(`b'\xef\xbb\xbf'`)을 포함하고, `llm_temp_label`, `llm_note` header가 들어감을 확인함
+- `/private/tmp/hantalk_sample_20_review_order.csv` 샘플 실행으로 `raw_text`, `regex_match_text`, `human_label` 열이 연속 배치됨을 확인함
+- df003 `char_window` verify hard_fail rule 추가 후 corpus search 결과:
+  - input texts: 10,000
+  - texts with hits: 155
+  - candidates: 161
+  - candidates by domain: `daily_conversation=51`, `news=84`, `non_published=24`, `learner_spoken_5_6=2`
+  - span source counts: `component_spans=62`, `regex_match_fallback=99`
+  - hard_failed candidates: 146
+- 당시 `df003_batch_000_human_review.xlsx`는 162행(header 포함), 35열로 생성됨을 확인함
+- 단, 최신 bundle gold test에서 `gold_recall=0.92`, `fn_count=4`가 발생함을 확인함. 원인은 `r_df003_v01`의 `적\s*(?:으로|인|일|에)` hard_fail이 candidate 주변 `char_window` 안의 다른 `적으로/적인`까지 잡아 gold TP 후보를 제거하기 때문임
+- df003 `component_right_context` verify hard_fail rule 수정 후 gold test 결과:
+  - `gold_total=50`
+  - `gold_matched=50`
+  - `gold_recall=1.0`
+  - `span_exact_recall=1.0`
+  - `fn_count=0`
+- df003 `component_right_context` verify hard_fail rule 수정 후 corpus search 결과:
+  - input texts: 10,000
+  - texts with hits: 281
+  - candidates: 296
+  - candidates by domain: `daily_conversation=64`, `news=185`, `non_published=43`, `learner_spoken_5_6=4`
+  - span source counts: `component_spans=63`, `regex_match_fallback=233`
+  - hard_failed candidates: 11
+- 당시 `df003_batch_000_human_review.xlsx`는 297행(header 포함), 35열로 재생성됨을 확인함
+- partial component 기반 `component_right_context` verify 적용 후 직접 detect 확인:
+  - `"어떤 문화가 특징적인 문화가 있을까요?"`는 `partial_component_spans.c2` 기준으로 `r_df003_v01` hard fail 처리되어 최종 candidates에서 제거됨
+  - 같은 문장을 `realtime=True`로 실행하면 rejected/partial 정보가 최종 output에서 숨겨짐
+  - `"저는 제주도에 가 본 적이 있어요."`는 `realtime=True`에서도 `component_spans` 후보로 유지됨
+- partial component 기반 verify 적용 후 df003 corpus search 결과:
+  - input texts: 10,000
+  - texts with hits: 173
+  - candidates: 180
+  - candidates by domain: `daily_conversation=51`, `news=100`, `non_published=27`, `learner_spoken_5_6=2`
+  - span source counts: `component_spans=63`, `regex_match_fallback=117`
+  - component span status counts: `ok=63`, `no_ordered_component_path=117`
+  - hard_failed candidates: 127
+- 최신 `df003_batch_000_human_review.csv` header에 partial 보조 열이 포함됨을 확인함
+- 최신 `df003_batch_000_human_review.xlsx`는 181행(header 포함), 40열로 재생성됨을 확인함
 
 ## 다음 작업
 
-1. `df003_batch_000_human_review.csv`에서 사람이 TP/FP/span 검수를 시작함
-2. 특히 `regex_match_fallback=188` 후보가 어떤 FP 유형인지 확인함
-3. 검수 결과를 바탕으로 gold recall=1을 유지하면서 df003 detect rule 또는 component rule을 좁힐 수 있는지 판단함
-4. 필요한 경우 df003 verify hard_fail rule 후보를 설계함
+1. 최신 `df003_batch_000_human_review.xlsx`에서 TP/FP/span 검수를 재개함
+2. 남은 `regex_match_fallback=117` 후보가 어떤 FP 유형인지 확인함
+3. gold recall=1을 유지하는 조건에서 추가 `component_right_context` 또는 component/gap 규칙으로 줄일 수 있는 FP 유형을 찾음
+4. 안전하게 줄일 수 없는 FP는 인코더 negative 후보로 남김
 
 ## 주의사항
 
@@ -197,6 +258,7 @@
 - `PROJECT_SPEC.md`의 `향후 detector 설계 검토 메모`는 SSOT가 아니라 비-SSOT 검토 목록입니다. 구현 전 다시 검토해야 합니다.
 - df003은 component span 조립이 붙었지만, 일반 말뭉치에서는 `regex_match_fallback` 후보가 FP로 남을 수 있습니다. corpus search 단계에서 이 후보들을 확인해야 합니다.
 - 현재 `detector_bundle.json`은 dict 정리 후 warnings=0으로 생성됩니다.
+- 현재 최신 `detector_bundle.json`은 warnings=0으로 export되며, df003 gold recall=1.0을 회복했습니다.
 
 
 ## 2026-04-30 업무 시작 점검
