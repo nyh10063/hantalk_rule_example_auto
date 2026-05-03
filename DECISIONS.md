@@ -254,3 +254,11 @@ Reason: `다면`처럼 FP가 거의 없는 문법항목에서 무한히 batch를
 ### Decision: encoder example export 단계에서는 TP/FP downsampling을 적용하지 않는다.
 
 Reason: 사람이 확정한 TP/FP pool은 나중에 학습 전략을 바꿀 때 다시 사용할 수 있는 원본 자료이다. export 단계에서 미리 downsampling하면 복구가 어렵고, 실제 모델 학습에서 불균형이 문제인지도 확인하기 어렵다. 따라서 `*_encoder_pair_examples.jsonl`에는 valid TP/FP를 모두 보존하고, class balancing은 실제 학습 결과를 본 뒤 `loss_pos_weight`, sampler, train subset sampling 등으로 별도 판단한다.
+
+### Decision: 전체 encoder 예문 파일은 item별 JSONL을 merge해서 자동 재생성한다.
+
+Reason: 전체 TP/FP 예문을 Excel이나 JSONL 한 파일에 수동 append하면 중복, 누락, 오래된 버전 혼입, split 불일치가 생기기 쉽다. 따라서 item별 `{item_id}_encoder_pair_examples.jsonl`을 SSOT로 유지하고, `all_encoder_pair_examples.jsonl`과 `all_encoder_examples.xlsx`는 `src.merge_encoder_examples`가 자동 생성하는 aggregate/ledger로 둔다. 전체 `all_encoder_*` 파일은 직접 수정하지 않고, item별 JSONL이 바뀌면 다시 생성한다.
+
+### Decision: 인코더 학습은 문법항목별 TP/FP export가 충분히 쌓인 뒤 실행한다.
+
+Reason: df003 하나만으로 바로 학습을 시작하면 전체 HanTalk 문법항목 분포와 실제 class balance를 반영하기 어렵다. 따라서 각 문법항목은 `export_encoder_examples.py`와 `merge_encoder_examples.py`까지 완료해 item별 SSOT와 전체 aggregate를 갱신하고, 실제 encoder fine-tuning은 여러 문법항목의 TP/FP가 충분히 모인 뒤 `all_encoder_pair_examples.jsonl`을 기준으로 실행한다.

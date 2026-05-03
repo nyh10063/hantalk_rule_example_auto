@@ -202,6 +202,17 @@
   - `processed_batches`는 생성된 batch 수가 아니라, 실제 labeled review 입력으로 집계된 batch 수로 정의함
   - `src/export_encoder_examples.py` summary에 `collection_policy`와 `class_balance.downsampling_applied=false`를 추가함
   - encoder example export 단계에서는 downsampling을 적용하지 않고, 실제 학습 결과를 본 뒤 class balancing 여부를 판단하기로 함
+- `src/merge_encoder_examples.py` 구현 완료
+  - item별 `{item_id}_encoder_pair_examples.jsonl`을 SSOT로 보고, 전체 `all_encoder_*` 파일은 derived aggregate로 자동 재생성함
+  - `--input` 명시 입력과 `--discover --artifact-root` 자동 탐색을 지원함
+  - discover는 `all/`, `tmp/`, `archive/`, `__pycache__/`, hidden folder를 제외함
+  - global `example_id`, `(item_id, example_id)`, `(item_id, label, raw_text, span_key)` 중복을 fatal error로 처리함
+  - 전체 ledger Excel에는 `label`, `text_a`, `text_b`, `span_segments`, `source_hit_id` 등을 포함함
+- df003 기준 전체 encoder aggregate 생성 완료
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/all/all_encoder_pair_examples.jsonl`
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/all/all_encoder_examples.xlsx`
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/all/all_encoder_examples_summary.json`
+  - 현재 전체 aggregate는 df003만 포함함
 
 ## 이번에 테스트한 것
 
@@ -489,25 +500,39 @@
   - validation result: `n_examples=287`
 - `PYTHONPYCACHEPREFIX=/private/tmp/hantalk_pycache python3 -m py_compile src/summarize_review.py src/export_encoder_examples.py` 통과
 - `git diff --check -- src/summarize_review.py src/export_encoder_examples.py PROJECT_SPEC.md DECISIONS.md CURRENT_TASK.md` 통과
+- `PYTHONPYCACHEPREFIX=/private/tmp/hantalk_pycache python3 -m py_compile src/merge_encoder_examples.py` 통과
+- df003 기준 전체 aggregate merge 실행 확인:
+  - command: `python3 -m src.merge_encoder_examples --artifact-root /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making --discover --out-dir /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/all`
+  - `n_input_files=1`
+  - `n_examples=287`
+  - `item_counts.df003=287`
+  - `positive=130`
+  - `negative=157`
+  - `train=229`, `dev=29`, `test=29`
+- 전체 aggregate JSONL validate-only 실행 확인:
+  - command: `python3 -m src.train_encoder_pair --examples-jsonl /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/all/all_encoder_pair_examples.jsonl --out-dir /private/tmp/hantalk_all_encoder_pair_validate --model-name-or-path klue/roberta-base --seed 42 --shuffle-seed 42 --validate-only --skip-tokenization-stats --overwrite`
+  - validation result: `n_examples=287`
+- 전체 ledger Excel 확인:
+  - sheet: `examples`
+  - rows: 287
+  - headers: `item_id`, `example_id`, `label`, `split`, `example_role`, `pattern_type`, `raw_text`, `span_segments`, `span_key`, `span_text`, `text_a`, `text_b`, `corpus_domain`, `source`, `source_hit_id`, `detect_rule_ids`, `note`
 ## 다음 작업
 
-1. df003 예문 수집은 현재 기준으로 멈추고, `df003_encoder_pair_examples.jsonl`을 학습 입력 SSOT로 사용함
-2. 실제 encoder 학습 전에 모델 후보와 실행 환경을 정함
-   - 후보 예: `klue/roberta-base`, `klue/bert-base`, 경량 Korean encoder 후보, DeBERTa 계열 등
-   - 목표: F1=1에 도달 가능한 모델 중 end-to-end inference latency가 가장 낮은 모델 찾기
-3. 선택한 backbone으로 `src.train_encoder_pair` 정식 학습을 실행함
-4. 학습 report에서 아래를 비교함
-   - dev/test F1, balanced accuracy
-   - truncation stats
-   - `avg_inference_example_sec`
-   - parameter count
-   - debug predictions
-5. 학습 결과가 불안정하면 batch_003부터 추가 labeled review를 수집해 예문 수를 늘림
+1. df003 예문 수집과 item별/전체 encoder example export는 현재 기준으로 완료됨
+2. 인코더 학습은 df003 하나만으로 바로 실행하지 않고, 여러 문법항목의 TP/FP export가 충분히 쌓인 뒤 전체 aggregate를 기준으로 실행함
+3. 다음 작업은 다음 문법항목을 선택해 df003과 같은 루프를 반복하는 것임
+   - gold 50
+   - detect rule/component/verify
+   - corpus search
+   - human review
+   - `summarize_review.py`
+   - `export_encoder_examples.py`
+   - `merge_encoder_examples.py`
 
 ## 주의사항
 
-- df003은 batch_000 + batch_002만으로 positive/negative 100개 기준을 충족했으므로, 다음 명시 요청이 있으면 인코더 fine-tuning을 시작할 수 있습니다.
-- 다만 모델 후보와 실행 환경을 정하기 전까지는 추가 corpus batch를 만들거나 labeled 파일을 덮어쓰지 않습니다.
+- df003은 batch_000 + batch_002만으로 positive/negative 100개 기준을 충족했지만, 인코더 fine-tuning은 모든 또는 충분한 문법항목의 TP/FP가 모인 뒤 실행합니다.
+- 다음 문법항목을 시작하기 전까지는 df003 labeled 파일과 encoder export 산출물을 덮어쓰지 않습니다.
 - 현재 구현한 것은 인코더 학습 실행이 아니라 pair-mode 학습 예문 export입니다.
 - `src/train_encoder_pair.py`는 구현되어 있지만, 현재 batch_000 기준 positive=60/negative=85이므로 정식 학습은 아직 권장하지 않습니다. smoke나 validate-only는 가능하지만 논문/실험용 학습은 positive/negative 각각 100개 이상을 확보한 뒤 실행합니다.
 - Phase 1에서는 Label Studio, Prefect, DVC, MLflow를 도입하지 않습니다.

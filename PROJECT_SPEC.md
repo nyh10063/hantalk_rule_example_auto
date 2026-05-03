@@ -309,6 +309,9 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 | `HanTalk_arti/example_making/{item_id}/{item_id}_encoder_examples.xlsx` | 인코더 학습 예문 사람이 확인하는 gold-like Excel 사본 | 자동화 | 사람 확인 |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_encoder_pair_examples.jsonl` | 인코더 pair-mode 학습용 기계친화 예문 SSOT | 자동화 | 향후 `train_encoder_pair.py` |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_encoder_examples_summary.json` | 인코더 예문 export 요약, split/role 분포, 목표 달성 여부 | 자동화 | 사람 + 학습 실행 판단 |
+| `HanTalk_arti/example_making/all/all_encoder_pair_examples.jsonl` | item별 encoder pair JSONL을 병합해 자동 생성하는 전체 aggregate. SSOT가 아님 | 자동화 | 향후 전체 학습/검증 |
+| `HanTalk_arti/example_making/all/all_encoder_examples.xlsx` | 전체 encoder 예문을 사람이 확인하는 ledger. 수동 append 금지 | 자동화 | 사람 확인 |
+| `HanTalk_arti/example_making/all/all_encoder_examples_summary.json` | 전체 aggregate의 item/label/split/role 분포와 source policy | 자동화 | 사람 + 학습 실행 판단 |
 | `logs/df003_regex_iterations.jsonl` | FN 분석과 수정 이력 | 자동화 | 사람 + Codex |
 
 
@@ -848,6 +851,27 @@ not_applicable
 - `conf_e_id`, `neg_boundary`, `neg_confusable`는 새 HanTalk 인코더 예문 export 경로에서 사용하지 않습니다.
 - split은 `pos_conti`, `pos_disconti`, `neg_target_absent` role별 stable hash 정렬 후 배정합니다.
 - 학습용 `.jsonl`은 기계친화 SSOT이고, `.xlsx`는 사람이 확인하기 위한 gold-like 사본입니다.
+
+## 전체 encoder 예문 aggregate
+
+문법항목별 `{item_id}_encoder_pair_examples.jsonl`은 item별 학습 예문 SSOT입니다. 여러 문법항목이 쌓이면 `src.merge_encoder_examples`가 item별 SSOT를 읽어 전체 aggregate와 사람이 보는 ledger를 자동 생성합니다.
+
+출력:
+
+```text
+HanTalk_arti/example_making/all/all_encoder_pair_examples.jsonl
+HanTalk_arti/example_making/all/all_encoder_examples.xlsx
+HanTalk_arti/example_making/all/all_encoder_examples_summary.json
+```
+
+원칙:
+
+- item별 `{item_id}_encoder_pair_examples.jsonl`은 item별 SSOT입니다.
+- `all_encoder_pair_examples.jsonl`은 item별 JSONL을 병합해 만든 자동 생성 aggregate이며, SSOT가 아닙니다.
+- `all_encoder_examples.xlsx`는 전체 encoder pair input을 사람이 확인하기 위한 ledger입니다.
+- 전체 `all_encoder_*` 파일은 수동 append하거나 직접 수정하지 않습니다. item별 JSONL이 바뀌면 `src.merge_encoder_examples`로 전체 파일을 다시 생성합니다.
+- merge 단계에서는 `example_id`, `(item_id, example_id)`, `(item_id, label, raw_text, span_key)` 중복을 fatal error로 처리합니다.
+- 인코더 학습은 개별 문법항목 하나가 끝날 때마다 바로 실행하지 않고, 문법항목별 TP/FP export가 충분히 쌓인 뒤 전체 aggregate를 기준으로 실행합니다.
 
 ## `src/train_encoder_pair.py` 학습 실행 파일
 
