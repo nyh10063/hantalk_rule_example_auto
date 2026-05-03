@@ -23,9 +23,19 @@ except ImportError:  # pragma: no cover - handled at runtime for xlsx output.
     openpyxl = None  # type: ignore[assignment]
 
 try:
-    from .detector.span_utils import format_span_segments, parse_span_segments
+    from .detector.span_utils import (
+        format_span_segments,
+        make_span_key,
+        make_span_text,
+        parse_span_segments,
+    )
 except ImportError:  # pragma: no cover - supports direct script execution.
-    from detector.span_utils import format_span_segments, parse_span_segments
+    from detector.span_utils import (
+        format_span_segments,
+        make_span_key,
+        make_span_text,
+        parse_span_segments,
+    )
 
 SUMMARY_SCHEMA_VERSION = "hantalk_all_encoder_examples_summary_v1"
 EXPECTED_ROW_SCHEMA_VERSION = "hantalk_encoder_pair_example_v1"
@@ -186,7 +196,7 @@ def _validate_and_normalize_row(row: dict[str, Any]) -> dict[str, Any]:
     example_role = str(row["example_role"]).strip()
     text_a = str(row["text_a"]).strip()
     text_b = str(row["text_b"]).strip()
-    raw_text = str(row["raw_text"]).strip()
+    raw_text = str(row["raw_text"])
     span_key = str(row["span_key"]).strip()
     span_text = str(row["span_text"]).strip()
 
@@ -204,7 +214,7 @@ def _validate_and_normalize_row(row: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"{source}: text_a must include [SPAN] and [/SPAN] markers")
     if not text_b:
         raise ValueError(f"{source}: blank text_b")
-    if not raw_text:
+    if not raw_text.strip():
         raise ValueError(f"{source}: blank raw_text")
     if not span_key:
         raise ValueError(f"{source}: blank span_key")
@@ -226,6 +236,21 @@ def _validate_and_normalize_row(row: dict[str, Any]) -> dict[str, Any]:
         span_segments = parse_span_segments(row["span_segments"])
     except Exception as exc:
         raise ValueError(f"{source}: invalid span_segments") from exc
+    computed_span_key = make_span_key(span_segments)
+    if computed_span_key != span_key:
+        raise ValueError(
+            f"{source}: span_key mismatch. row span_key={span_key!r}, "
+            f"computed from span_segments={computed_span_key!r}"
+        )
+    try:
+        computed_span_text = make_span_text(raw_text, span_segments)
+    except Exception as exc:
+        raise ValueError(f"{source}: span_segments out of raw_text bounds") from exc
+    if computed_span_text != span_text:
+        raise ValueError(
+            f"{source}: span_text mismatch. row span_text={span_text!r}, "
+            f"computed from raw_text/span_segments={computed_span_text!r}"
+        )
 
     normalized = {key: value for key, value in row.items() if not key.startswith("_")}
     normalized["schema_version"] = schema_version

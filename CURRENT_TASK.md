@@ -207,6 +207,9 @@
   - `--input` 명시 입력과 `--discover --artifact-root` 자동 탐색을 지원함
   - discover는 `all/`, `tmp/`, `archive/`, `__pycache__/`, hidden folder를 제외함
   - global `example_id`, `(item_id, example_id)`, `(item_id, label, raw_text, span_key)` 중복을 fatal error로 처리함
+  - `raw_text`는 span offset 보존을 위해 `.strip()`하지 않고 원문 그대로 유지하며, blank 여부만 `raw_text.strip()`으로 검사함
+  - `span_segments`에서 계산한 `span_key`가 row의 `span_key`와 다르면 fatal error로 처리함
+  - `raw_text`와 `span_segments`에서 추출한 `span_text`가 row의 `span_text`와 다르면 fatal error로 처리함
   - 전체 ledger Excel에는 `label`, `text_a`, `text_b`, `span_segments`, `source_hit_id` 등을 포함함
 - df003 기준 전체 encoder aggregate 생성 완료
   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/all/all_encoder_pair_examples.jsonl`
@@ -501,6 +504,7 @@
 - `PYTHONPYCACHEPREFIX=/private/tmp/hantalk_pycache python3 -m py_compile src/summarize_review.py src/export_encoder_examples.py` 통과
 - `git diff --check -- src/summarize_review.py src/export_encoder_examples.py PROJECT_SPEC.md DECISIONS.md CURRENT_TASK.md` 통과
 - `PYTHONPYCACHEPREFIX=/private/tmp/hantalk_pycache python3 -m py_compile src/merge_encoder_examples.py` 통과
+- `raw_text` 원문 보존, `span_key`/`span_text` 검증 보강 후 `src.merge_encoder_examples` df003 merge 재실행 통과
 - df003 기준 전체 aggregate merge 실행 확인:
   - command: `python3 -m src.merge_encoder_examples --artifact-root /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making --discover --out-dir /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/all`
   - `n_input_files=1`
