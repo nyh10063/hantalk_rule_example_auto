@@ -153,7 +153,15 @@ Status: 이 결정은 이후 `브릿지는 공용 registry로 관리하고 compo
 
 ### Decision: DetectorEngine은 명시된 active unit만 실행한다.
 
-Reason: `active_unit_ids`가 비어 있을 때 모든 runtime unit을 자동 실행하면 300개 문법항목 확장 단계에서 응답속도와 디버깅 안정성이 크게 흔들릴 수 있다. 따라서 Phase 1 DetectorEngine은 `active_unit_ids`를 필수로 요구하고, 전체 실행은 `allow_all=True`를 명시한 경우에만 허용한다. `group=c` polyset unit은 의미별 verify 정책이 아직 확정되지 않았으므로 `allow_experimental_polyset=True`가 없으면 실행하지 않는다.
+Reason: `active_unit_ids`가 비어 있을 때 모든 runtime unit을 자동 실행하면 300개 문법항목 확장 단계에서 응답속도와 디버깅 안정성이 크게 흔들릴 수 있다. 따라서 Phase 1 DetectorEngine은 `active_unit_ids`를 필수로 요구하고, 전체 실행은 `allow_all=True`를 명시한 경우에만 허용한다. 초기에는 `group=c` polyset unit을 `allow_experimental_polyset=True` 없이는 막았으나, ce002/ce003부터는 `ps_id` task unit을 공식 경로로 열고 `allow_polyset=True`로 명시 실행한다.
+
+### Decision: group=c polyset은 `e_id`와 `ps_id`를 분리한 2-ID 체계로 운영한다.
+
+Reason: ce002/ce003처럼 표면형은 같고 교수 의미만 다른 항목에서 `ce002` 같은 member e_id를 대표 detect/encoder ID로 쓰면, ce003 의미 예문이 ce002 gloss에 대해 positive가 되는 등 binary encoder pair input의 의미가 흐려진다. 반대로 가짜 teaching item e_id를 새로 만들면 300개 문법항목 관리에서 교수 문법항목과 runtime 편의 항목이 섞인다. 따라서 `e_id`는 teaching item id로 유지하고, `ps_id`를 detect_unit_id이자 encoder_task_id로 사용한다. ce002/ce003의 첫 공식 polyset task unit은 `ps_ce002`이다. `primary_e_id`는 의미 대표가 아니라 stable ID anchor이다.
+
+### Decision: polyset task metadata는 `polysets` 시트에서 명시한다.
+
+Reason: polyset canonical form과 binary encoder용 gloss를 member `canonical_form`/`gloss`에서 항상 안전하게 자동 추론하기는 어렵다. 따라서 `dict_ps_*.xlsx` 계열은 `polysets` 시트에 `ps_id`, `primary_e_id`, `member_e_ids`, `ps_canonical_form`, `gloss_intro`, `detect_ruleset_id`, `verify_ruleset_id`, `note`를 둔다. Encoder `text_b`는 `ps_canonical_form + "\n" + (gloss_intro + member item glosses)`로 만들며, `note`는 사람이 보는 관리 메모로만 보존한다.
 
 ### Decision: bundle export validation은 조용한 오작동보다 빠른 실패를 우선한다.
 

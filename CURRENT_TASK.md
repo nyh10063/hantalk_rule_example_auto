@@ -3,9 +3,9 @@
 ## 현재 상태
 
 - Current phase: Phase 1 pilot
-- Current item: df003 `ㄴ/은 적 있/없`
+- Current item: ps_ce002 `ㄴ/은/는데` polyset task (`ce002`, `ce003`)
 - Current project goal: 300개 문법항목의 검색용 정규식 및 오탐 필터링 인코더용 positive/negative 예문 구축 자동화
-- Current immediate goal: df003 batch_000 + batch_002 labeled review로 인코더 학습용 TP/FP 예문 export를 완료했으므로, 다음은 encoder pair JSONL validate-only 확인 뒤 실제 encoder backbone 학습 비교로 넘어가기
+- Current immediate goal: ps_ce002 2-ID 체계(`e_id` teaching item, `ps_id` detect/encoder task unit)를 기존 자동화 경로에 순차 반영하고, `gold_ps_ce002.xlsx` 50개 기준 gold recall=1을 확보하기
 
 ## 현재까지 완료
 
@@ -216,6 +216,36 @@
   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/all/all_encoder_examples.xlsx`
   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/all/all_encoder_examples_summary.json`
   - 현재 전체 aggregate는 df003만 포함함
+- ps_ce002 `ㄴ/은/는데` polyset task의 1차 자동화 경로를 열기 시작함
+  - 입력 dict: `datasets/dict/dict_ps_ce002.xlsx`
+  - 입력 gold: `datasets/gold/gold_ps_ce002.xlsx`
+  - 2-ID 체계: `e_id=teaching_item_id`, `ps_id=detect_unit_id=encoder_task_id`
+  - `polysets` 시트의 `ps_id=ps_ce002`를 runtime/encoder task unit으로 사용함
+  - 이번 단계에서는 `ㄴ/은/는데` bridge와 component span 조립을 보류하고, detect regex 기반 gold recall 평가까지만 수행함
+- `src/export_gold.py` 구현 완료
+  - `gold_ps_ce002.xlsx`를 `exported_gold/ps_ce002_gold_50.jsonl`로 변환함
+  - `ps_id`, `member_e_ids`, `target_sentence`, `span_segments`를 검증함
+- `src/detector/export_bundle.py`를 `ps_id`/`polysets` 시트 지원으로 확장함
+  - `items.ps_id`를 공식 지원하고, 기존 `polyset_id`는 fallback으로 유지함
+  - `polysets` 시트에서 `ps_canonical_form`, `gloss_intro`, `member_e_ids`, `detect_ruleset_id`, `verify_ruleset_id`를 읽음
+  - `runtime_units["ps_ce002"]`에 polyset canonical form과 encoder gloss를 포함함
+  - `rule_components`/`detect_rules`의 task unit id는 `unit_id → ps_id → e_id` 순서로 해석함
+- `src/detector/engine.py`, `src/test_gold.py`, `src/search_corpus.py`에 공식 `allow_polyset` 경로를 추가함
+  - 기존 `allow_experimental_polyset`은 호환용으로 유지함
+- `dict_ps_ce002.xlsx`에 `polysets.detect_ruleset_id=rs_ps_ce002_d01`과 `detect_rules.ps_id=ps_ce002` 기반 1차 detect rule을 추가함
+  - `r_ps_ce002_d01`: `(?:는데|은데|[가-힣]데)`
+  - note: bridge/component span은 다음 단계에서 별도 검토
+- ps_ce002 전용 개발 bundle 생성 완료
+  - `configs/detector/detector_bundle_ps_ce002.json`
+- ps_ce002 gold 50개 bundle 평가 완료
+  - `gold_total=50`
+  - `gold_matched=50`
+  - `gold_recall=1.0`
+  - `sentence_recall=1.0`
+  - `span_overlap_recall=1.0`
+  - `span_exact_recall=1.0`
+  - `span_source_counts={"regex_match": 50}`
+  - `fn_count=0`
 
 ## 이번에 테스트한 것
 

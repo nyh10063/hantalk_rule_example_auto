@@ -191,6 +191,7 @@ def evaluate_detector_bundle(
     gold_records: list[dict[str, Any]],
     active_unit_ids: list[str],
     bundle_match_policy: str,
+    allow_polyset: bool = False,
 ) -> dict[str, Any]:
     selected_gold = [r for r in gold_records if r.get("item_id") == item_id]
     fn_records: list[dict[str, Any]] = []
@@ -207,7 +208,12 @@ def evaluate_detector_bundle(
     for record in selected_gold:
         sentence = str(record.get("sentence") or "")
         spans = _target_spans(record)
-        detector_result = engine.detect(sentence, active_unit_ids=active_unit_ids, text_id=str(record.get("example_id") or ""))
+        detector_result = engine.detect(
+            sentence,
+            active_unit_ids=active_unit_ids,
+            allow_polyset=allow_polyset,
+            text_id=str(record.get("example_id") or ""),
+        )
         candidates = [c for c in detector_result.get("candidates", []) if _candidate_matches_item(c, item_id)]
         rejected_candidates = [
             c for c in detector_result.get("rejected_candidates", []) if _candidate_matches_item(c, item_id)
@@ -316,6 +322,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Runtime unit id to execute in bundle mode. Repeat to enable multiple units. Default: item id.",
     )
+    parser.add_argument("--allow-polyset", action="store_true", help="Allow polyset ps_id runtime units in bundle mode.")
     parser.add_argument(
         "--bundle-match-policy",
         choices=["sentence", "overlap"],
@@ -351,6 +358,7 @@ def main() -> int:
                 gold_records=gold_records,
                 active_unit_ids=active_unit_ids,
                 bundle_match_policy=args.bundle_match_policy,
+                allow_polyset=args.allow_polyset,
             )
         else:
             regex_records = _read_jsonl(versions_path)

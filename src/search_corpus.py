@@ -208,6 +208,7 @@ def search_corpus(
     out_jsonl: Path,
     review_csv: Path,
     report_json: Path,
+    allow_polyset: bool = False,
     allow_experimental_polyset: bool = False,
     include_debug: bool = False,
 ) -> dict[str, Any]:
@@ -242,6 +243,7 @@ def search_corpus(
             result = engine.detect(
                 raw_text,
                 active_unit_ids=active_unit_ids,
+                allow_polyset=allow_polyset,
                 allow_experimental_polyset=allow_experimental_polyset,
                 text_id=str(record.get("text_id") or ""),
                 include_debug=include_debug,
@@ -347,6 +349,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Batch label for derived filenames. Defaults to the first batch_### token in --input-jsonl.",
     )
     parser.add_argument("--allow-experimental-polyset", action="store_true")
+    parser.add_argument("--allow-polyset", action="store_true")
     parser.add_argument("--include-debug", action="store_true")
     return parser.parse_args(argv)
 
@@ -374,6 +377,7 @@ def main(argv: list[str] | None = None) -> int:
         out_jsonl=out_jsonl,
         review_csv=review_csv,
         report_json=report_json,
+        allow_polyset=args.allow_polyset,
         allow_experimental_polyset=args.allow_experimental_polyset,
         include_debug=args.include_debug,
     )

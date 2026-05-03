@@ -47,6 +47,7 @@ class DetectorEngine:
         *,
         active_unit_ids: list[str] | None = None,
         allow_all: bool = False,
+        allow_polyset: bool = False,
         allow_experimental_polyset: bool = False,
         max_matches_per_rule: int = 50,
         max_candidates_per_component: int = 20,
@@ -68,6 +69,7 @@ class DetectorEngine:
         units = self._select_units(
             active_unit_ids,
             allow_all=allow_all,
+            allow_polyset=allow_polyset,
             allow_experimental_polyset=allow_experimental_polyset,
         )
         raw_candidates: list[dict[str, Any]] = []
@@ -172,6 +174,7 @@ class DetectorEngine:
         active_unit_ids: list[str] | None,
         *,
         allow_all: bool,
+        allow_polyset: bool,
         allow_experimental_polyset: bool,
     ) -> list[dict[str, Any]]:
         if active_unit_ids is None:
@@ -183,10 +186,10 @@ class DetectorEngine:
             if unit_id not in self.runtime_units:
                 raise ValueError(f"Unknown active_unit_id: {unit_id}")
             unit = self.runtime_units[unit_id]
-            if unit.get("unit_type") == "polyset" and not allow_experimental_polyset:
+            if unit.get("unit_type") == "polyset" and not (allow_polyset or allow_experimental_polyset):
                 raise ValueError(
-                    f"Polyset runtime unit is experimental and disabled in Phase 1: {unit_id}. "
-                    "Pass allow_experimental_polyset=True only for explicit experiments."
+                    f"Polyset runtime unit is disabled unless explicitly allowed: {unit_id}. "
+                    "Pass allow_polyset=True for ps_id task units."
                 )
             units.append(unit)
         return units

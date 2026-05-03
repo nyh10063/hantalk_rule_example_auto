@@ -424,8 +424,8 @@ DetectorEngine 실행 안전장치:
 - `offline`은 기본값이며 gold 평가, corpus search, audit, 예문 구축에 사용합니다.
 - `realtime`은 실제 사용자 발화 처리에 사용하며, `regex_match_fallback` 후보와 rejected/partial/debug 보조 정보를 최종 출력에서 숨깁니다.
 - 전체 runtime unit 실행은 `allow_all=True`를 명시한 경우에만 허용합니다.
-- `group=c` polyset runtime unit은 아직 실험 단계이므로 기본 실행을 막습니다.
-- polyset unit은 명시적 실험에서 `allow_experimental_polyset=True`를 넘긴 경우에만 실행합니다.
+- polyset task unit은 기본적으로 자동 실행하지 않으며, `active_unit_ids`에 ps_id를 명시하고 `allow_polyset=True`를 넘긴 경우에만 실행합니다.
+- 기존 실험용 옵션 `allow_experimental_polyset=True`는 호환용으로 남기되, ce002/ce003부터의 공식 경로는 `allow_polyset=True`입니다.
 - rule 하나에서 match가 폭주하지 않도록 `max_matches_per_rule` 제한을 둡니다. 기본값은 50입니다.
 - component 후보가 폭주하지 않도록 `max_candidates_per_component` 제한을 둡니다. 기본값은 20입니다.
 - component 후보 조합 경로가 폭주하지 않도록 `max_component_paths` 제한을 둡니다. 기본값은 2000입니다.
@@ -433,6 +433,51 @@ DetectorEngine 실행 안전장치:
 - component/bridge 상세 debug는 기본 출력하지 않고 `include_debug=True`일 때만 포함합니다.
 - 제한에 걸리면 detector result summary의 `n_matches_truncated`, `truncated_rules`에 기록합니다.
 - detector result summary에는 component span 상태를 빠르게 확인할 수 있도록 `n_component_span_success`, `n_component_span_fallback`, `n_component_span_regex_only`, `span_source_counts`를 기록합니다.
+
+## group=c polyset 2-ID 체계
+
+ce002/ce003처럼 표면형은 같고 교수 의미가 나뉘는 group=c 항목은 아래 2-ID 체계로 운영합니다.
+
+| 층위 | ID | 역할 |
+| --- | --- | --- |
+| teaching item | `e_id` (`ce002`, `ce003`) | 사람이 가르치는 문법항목 의미와 gloss를 보존 |
+| task unit | `ps_id` (`ps_ce002`) | 정규식 detect, corpus search, human review, binary encoder 오탐 필터링 단위 |
+
+원칙:
+
+- HanTalk의 현재 사용자 발화 기본 판정은 다의의미 분별이 아니라 오탐 제거입니다.
+- `ps_id`는 detect_unit_id이자 encoder_task_id입니다.
+- `e_id`는 teaching_item_id이며, 교수 메시지와 의미별 gloss를 위한 metadata입니다.
+- `primary_e_id`는 의미 대표가 아니라 stable ID anchor입니다.
+- `polysets.note`는 사람이 보는 관리 메모이며 encoder 입력에는 사용하지 않습니다.
+- binary encoder의 `text_b`는 polyset canonical form과 polyset encoder gloss를 사용합니다.
+
+`dict_ps_ce002.xlsx`의 `polysets` 최소 schema:
+
+```text
+ps_id
+primary_e_id
+member_e_ids
+ps_canonical_form
+gloss_intro
+detect_ruleset_id
+verify_ruleset_id
+note
+```
+
+`ps_ce002`의 encoder `text_b`는 아래 방식으로 생성합니다.
+
+```text
+{ps_canonical_form}
+{gloss_intro} {member_e_id 순서의 items.gloss를 ; 로 연결}
+```
+
+예:
+
+```text
+ㄴ/은/는데
+다음 의미를 포함하는 연결어미: 앞절의 상황·배경을 제시하고 뒤절로 이어지게 하는 연결어미; 앞절과 뒤절이 대조·대립 혹은 양보적 전환, 반전되는 관계로 이어질 때 쓰는 연결어미
+```
 
 DetectorEngine span 정책:
 
@@ -697,9 +742,9 @@ DetectorEngine 기반 구현
 src/test_gold.py의 DetectorEngine 기반 리팩터링
 ```
 
-component bridge 공용화와 df003 component span 조립도 Phase 1에서 구현되었습니다. 아래 항목들은 아직 당장 구현하지 않고, 다음 단계에서 실행 가능성과 schema 안정성을 검토합니다.
+component bridge 공용화와 df003 component span 조립도 Phase 1에서 구현되었습니다. ce002/ce003부터는 `ps_id` 기반 polyset task unit의 gold recall 평가 경로도 열었습니다. 아래 항목들은 아직 당장 구현하지 않고, 다음 단계에서 실행 가능성과 schema 안정성을 검토합니다.
 
-- `group=c` 항목을 사용자 실시간 발화 detect에서는 개별 `e_id`가 아니라 `polyset_id` 단위 runtime unit으로 합치는 구조.
+- `group=c` 항목을 사용자 실시간 발화 detect에서 어느 profile 범위까지 `ps_id` 단위 runtime unit으로 켤지 정하는 구조.
 - `group=c`의 특정 의미 판정은 실시간 detect에서 하지 않고, 교수용 패널이나 오류 수정 제안에서 `teaching_target_e_id`로 다루는 구조.
 - `detect_profiles.xlsx` 또는 profile JSON으로 외부에서 detect할 항목 목록을 조절하는 구조.
 - 사람이 관리하는 profile은 `e_id` 기준으로 두되, runtime에서는 `active_unit_ids`와 `teaching_target_e_ids`로 나누어 사용하는 구조.

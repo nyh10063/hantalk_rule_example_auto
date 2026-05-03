@@ -29,7 +29,6 @@ REQUIRED_COLUMNS = {
         "e_id",
         "canonical_form",
         "group",
-        "polyset_id",
         "disconti_allowed",
         "e_comp_id",
         "detect_ruleset_id",
@@ -37,7 +36,6 @@ REQUIRED_COLUMNS = {
         "gloss",
     },
     "rule_components": {
-        "e_id",
         "comp_surf",
         "comp_id",
         "is_required",
@@ -48,7 +46,6 @@ REQUIRED_COLUMNS = {
         "max_gap_to_next",
     },
     "detect_rules": {
-        "e_id",
         "ruleset_id",
         "rule_id",
         "stage",
@@ -66,6 +63,7 @@ VALID_TARGETS_BY_STAGE = {
     "verify": {"raw_sentence", "char_window", "component_right_context"},
 }
 VALID_ORDER_POLICIES = {"fx", "fl"}
+TASK_UNIT_ID_COLUMNS = ("unit_id", "ps_id", "e_id")
 
 
 class BundleExportError(ValueError):
@@ -135,6 +133,23 @@ def _split_ids(value: Any) -> list[str]:
     return [part.strip() for part in text.split(";") if part.strip()]
 
 
+def _task_unit_id(record: dict[str, Any]) -> str | None:
+    """Return the explicit runtime task unit id for rows that may be item- or ps-based."""
+    for key in TASK_UNIT_ID_COLUMNS:
+        value = _text(record.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _required_task_unit_id(record: dict[str, Any], *, sheet: str, row_no: int) -> str:
+    unit_id = _task_unit_id(record)
+    if unit_id is None:
+        keys = "/".join(TASK_UNIT_ID_COLUMNS)
+        raise BundleExportError(f"{sheet}:{row_no} missing required task unit id ({keys})")
+    return unit_id
+
+
 def _read_sheet(workbook: Any, sheet_name: str) -> tuple[list[str], list[tuple[int, dict[str, Any]]]]:
     worksheet = workbook[sheet_name]
     header_row = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True))
@@ -177,6 +192,14 @@ def _check_required_structure(workbook: Any) -> None:
         missing_columns = sorted(required_columns - set(headers))
         if missing_columns:
             raise BundleExportError(f"{sheet_name} missing required column(s): {', '.join(missing_columns)}")
+        if sheet_name in {"rule_components", "detect_rules"} and not (set(headers) & set(TASK_UNIT_ID_COLUMNS)):
+            keys = ", ".join(TASK_UNIT_ID_COLUMNS)
+            raise BundleExportError(f"{sheet_name} must contain one task unit id column: {keys}")
+
+    item_headers, _ = _read_sheet(workbook, "items")
+    if not ({"ps_id", "polyset_id"} & set(item_headers)):
+        # Single-item dictionaries do not need ps_id/polyset_id, so this is not fatal.
+        return
 
 
 def _looks_like_python_regex_literal(pattern: str) -> bool:
@@ -192,6 +215,18 @@ def _derive_polyset_form(items: list[dict[str, Any]]) -> str:
     return stripped[0] if stripped and all(form == stripped[0] for form in stripped) else "/".join(forms)
 
 
+def _join_encoder_gloss(gloss_intro: str | None, member_items: list[dict[str, Any]]) -> str | None:
+    member_glosses = [str(item.get("gloss") or "").strip().rstrip(".") for item in member_items if item.get("gloss")]
+    member_glosses = [gloss for gloss in member_glosses if gloss]
+    intro = (gloss_intro or "").strip()
+    if not member_glosses:
+        return intro or None
+    joined = "; ".join(member_glosses)
+    if intro:
+        return f"{intro} {joined}"
+    return joined
+
+
 def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
     workbook = load_workbook(dict_xlsx, read_only=True, data_only=True)
     _check_required_structure(workbook)
@@ -200,6 +235,15 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
     _, item_rows = _read_sheet(workbook, "items")
     _, component_rows = _read_sheet(workbook, "rule_components")
     _, rule_rows = _read_sheet(workbook, "detect_rules")
+    polyset_rows: list[tuple[int, dict[str, Any]]] = []
+    if "polysets" in workbook.sheetnames:
+        polyset_headers, polyset_rows = _read_sheet(workbook, "polysets")
+        required_polyset_columns = {"ps_id", "primary_e_id", "member_e_ids", "ps_canonical_form", "gloss_intro", "note"}
+        missing_polyset_columns = sorted(required_polyset_columns - set(polyset_headers))
+        if missing_polyset_columns:
+            raise BundleExportError(
+                f"polysets missing required column(s): {', '.join(missing_polyset_columns)}"
+            )
 
     items_by_e_id: dict[str, dict[str, Any]] = {}
     for row_no, row in item_rows:
@@ -209,14 +253,15 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
         group = _required_text(row, "group", sheet="items", row_no=row_no, lower=True)
         if group not in VALID_GROUPS:
             raise BundleExportError(f"items:{row_no} group must be one of a/b/c: {group!r}")
-        polyset_id = _text(row.get("polyset_id"))
-        if group == "c" and polyset_id is None:
-            warnings.append(f"items:{row_no} group=c but polyset_id is empty for e_id={e_id}")
+        ps_id = _text(row.get("ps_id")) or _text(row.get("polyset_id"))
+        if group == "c" and ps_id is None:
+            warnings.append(f"items:{row_no} group=c but ps_id/polyset_id is empty for e_id={e_id}")
         items_by_e_id[e_id] = {
             "e_id": e_id,
             "canonical_form": _required_text(row, "canonical_form", sheet="items", row_no=row_no),
             "group": group,
-            "polyset_id": polyset_id,
+            "ps_id": ps_id,
+            "polyset_id": ps_id,
             "level": _text(row.get("난이도")),
             "topic": _text(row.get("주제")),
             "disconti_allowed": _bool_value(row.get("disconti_allowed"), sheet="items", row_no=row_no, key="disconti_allowed"),
@@ -226,12 +271,55 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
             "gloss": _text(row.get("gloss")),
         }
 
+    explicit_polysets_by_id: dict[str, dict[str, Any]] = {}
+    for row_no, row in polyset_rows:
+        ps_id = _required_text(row, "ps_id", sheet="polysets", row_no=row_no)
+        if ps_id in explicit_polysets_by_id:
+            raise BundleExportError(f"polysets.ps_id duplicated: {ps_id}")
+        member_e_ids = _split_ids(row.get("member_e_ids"))
+        if not member_e_ids:
+            raise BundleExportError(f"polysets:{row_no} member_e_ids must not be blank for ps_id={ps_id}")
+        missing_members = [e_id for e_id in member_e_ids if e_id not in items_by_e_id]
+        if missing_members:
+            raise BundleExportError(
+                f"polysets:{row_no} member_e_ids not found in items for ps_id={ps_id}: {', '.join(missing_members)}"
+            )
+        primary_e_id = _required_text(row, "primary_e_id", sheet="polysets", row_no=row_no)
+        if primary_e_id not in member_e_ids:
+            raise BundleExportError(
+                f"polysets:{row_no} primary_e_id={primary_e_id} is not in member_e_ids for ps_id={ps_id}"
+            )
+        for member_e_id in member_e_ids:
+            item_ps_id = items_by_e_id[member_e_id].get("ps_id")
+            if item_ps_id and item_ps_id != ps_id:
+                raise BundleExportError(
+                    f"polysets:{row_no} member e_id={member_e_id} has items.ps_id={item_ps_id}, expected {ps_id}"
+                )
+            if items_by_e_id[member_e_id].get("group") != "c":
+                raise BundleExportError(
+                    f"polysets:{row_no} member e_id={member_e_id} must have group=c for ps_id={ps_id}"
+                )
+        member_items = [items_by_e_id[e_id] for e_id in member_e_ids]
+        gloss_intro = _text(row.get("gloss_intro"))
+        explicit_polysets_by_id[ps_id] = {
+            "ps_id": ps_id,
+            "polyset_id": ps_id,
+            "primary_e_id": primary_e_id,
+            "member_e_ids": member_e_ids,
+            "canonical_form": _required_text(row, "ps_canonical_form", sheet="polysets", row_no=row_no),
+            "gloss_intro": gloss_intro,
+            "encoder_gloss": _join_encoder_gloss(gloss_intro, member_items),
+            "note": _text(row.get("note")),
+            "detect_ruleset_id": _text(row.get("detect_ruleset_id")),
+            "verify_ruleset_id": _text(row.get("verify_ruleset_id")),
+        }
+
     components_by_e_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
     referenced_bridge_ids: set[str] = set()
     for row_no, row in component_rows:
-        e_id = _required_text(row, "e_id", sheet="rule_components", row_no=row_no)
-        if e_id not in items_by_e_id:
-            raise BundleExportError(f"rule_components:{row_no} e_id not found in items: {e_id}")
+        unit_id = _required_task_unit_id(row, sheet="rule_components", row_no=row_no)
+        if unit_id not in items_by_e_id and unit_id not in explicit_polysets_by_id:
+            raise BundleExportError(f"rule_components:{row_no} task unit id not found in items/polysets: {unit_id}")
         bridge_id = _text(row.get("bridge_id"))
         if bridge_id is not None:
             if bridge_id not in BRIDGE_REGISTRY:
@@ -247,7 +335,10 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
                 f"rule_components:{row_no} order_policy={order_policy!r} invalid; allowed: {allowed}"
             )
         component = {
-            "e_id": e_id,
+            "e_id": unit_id,
+            "unit_id": unit_id,
+            "source_e_id": _text(row.get("e_id")),
+            "ps_id": _text(row.get("ps_id")),
             "comp_surf": _required_text(row, "comp_surf", sheet="rule_components", row_no=row_no),
             "comp_id": _required_text(row, "comp_id", sheet="rule_components", row_no=row_no),
             "is_required": _bool_value(row.get("is_required"), sheet="rule_components", row_no=row_no, key="is_required"),
@@ -258,7 +349,7 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
             "max_gap_to_next": _int_or_none(row.get("max_gap_to_next"), sheet="rule_components", row_no=row_no, key="max_gap_to_next"),
             "bridge_id": bridge_id,
         }
-        components_by_e_id[e_id].append(component)
+        components_by_e_id[unit_id].append(component)
 
     for components in components_by_e_id.values():
         components.sort(key=lambda item: (item.get("comp_order") is None, item.get("comp_order") or 0, item["comp_id"]))
@@ -271,9 +362,9 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
     rules_by_ruleset_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
     seen_rule_ids: set[str] = set()
     for row_no, row in rule_rows:
-        e_id = _required_text(row, "e_id", sheet="detect_rules", row_no=row_no)
-        if e_id not in items_by_e_id:
-            raise BundleExportError(f"detect_rules:{row_no} e_id not found in items: {e_id}")
+        unit_id = _required_task_unit_id(row, sheet="detect_rules", row_no=row_no)
+        if unit_id not in items_by_e_id and unit_id not in explicit_polysets_by_id:
+            raise BundleExportError(f"detect_rules:{row_no} task unit id not found in items/polysets: {unit_id}")
         ruleset_id = _required_text(row, "ruleset_id", sheet="detect_rules", row_no=row_no)
         rule_id = _required_text(row, "rule_id", sheet="detect_rules", row_no=row_no)
         if rule_id in seen_rule_ids:
@@ -293,11 +384,11 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
                 raise BundleExportError(
                     f"detect_rules:{row_no} target=component_right_context requires component_id for rule_id={rule_id}"
                 )
-            if component_id not in component_ids_by_e_id.get(e_id, set()):
-                known = ", ".join(sorted(component_ids_by_e_id.get(e_id, set())))
+            if component_id not in component_ids_by_e_id.get(unit_id, set()):
+                known = ", ".join(sorted(component_ids_by_e_id.get(unit_id, set())))
                 raise BundleExportError(
                     f"detect_rules:{row_no} component_id={component_id!r} not found in rule_components "
-                    f"for e_id={e_id}; known component_id values: {known}"
+                    f"for unit_id={unit_id}; known component_id values: {known}"
                 )
         elif component_id is not None:
             warnings.append(
@@ -316,7 +407,10 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
             warnings.append(f"detect_rules:{row_no} verify rule has hard_fail=false for rule_id={rule_id}")
 
         rule = {
-            "e_id": e_id,
+            "e_id": unit_id,
+            "unit_id": unit_id,
+            "source_e_id": _text(row.get("e_id")),
+            "ps_id": _text(row.get("ps_id")),
             "ruleset_id": ruleset_id,
             "rule_id": rule_id,
             "stage": stage,
@@ -346,6 +440,18 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
             if not verify_rules:
                 raise BundleExportError(f"items e_id={e_id} verify_ruleset_id has no verify rules: {verify_ruleset_id}")
 
+    for ps_id, polyset in explicit_polysets_by_id.items():
+        detect_ruleset_id = polyset.get("detect_ruleset_id")
+        verify_ruleset_id = polyset.get("verify_ruleset_id")
+        if detect_ruleset_id:
+            detect_rules = [rule for rule in rules_by_ruleset_id.get(detect_ruleset_id, []) if rule.get("stage") == "detect"]
+            if not detect_rules:
+                raise BundleExportError(f"polysets ps_id={ps_id} detect_ruleset_id has no detect rules: {detect_ruleset_id}")
+        if verify_ruleset_id:
+            verify_rules = [rule for rule in rules_by_ruleset_id.get(verify_ruleset_id, []) if rule.get("stage") == "verify"]
+            if not verify_rules:
+                raise BundleExportError(f"polysets ps_id={ps_id} verify_ruleset_id has no verify rules: {verify_ruleset_id}")
+
     for ruleset_id, rules in rules_by_ruleset_id.items():
         stages = {rule["stage"] for rule in rules}
         if len(stages) > 1:
@@ -353,6 +459,10 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
 
     referenced_rulesets = {item.get("detect_ruleset_id") for item in items_by_e_id.values()} | {
         item.get("verify_ruleset_id") for item in items_by_e_id.values()
+    } | {
+        polyset.get("detect_ruleset_id") for polyset in explicit_polysets_by_id.values()
+    } | {
+        polyset.get("verify_ruleset_id") for polyset in explicit_polysets_by_id.values()
     }
     referenced_rulesets.discard(None)
     for ruleset_id in sorted(all_ruleset_ids - referenced_rulesets):
@@ -360,22 +470,45 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
 
     polyset_members: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for item in items_by_e_id.values():
-        polyset_id = item.get("polyset_id")
+        polyset_id = item.get("ps_id") or item.get("polyset_id")
         if polyset_id:
             polyset_members[polyset_id].append(item)
+    for polyset_id, polyset in explicit_polysets_by_id.items():
+        if polyset_id not in polyset_members:
+            polyset_members[polyset_id] = [items_by_e_id[e_id] for e_id in polyset["member_e_ids"]]
 
     polysets_by_id: dict[str, dict[str, Any]] = {}
     for polyset_id, members in sorted(polyset_members.items()):
         member_e_ids = [member["e_id"] for member in members]
-        polysets_by_id[polyset_id] = {
-            "polyset_id": polyset_id,
-            "member_e_ids": member_e_ids,
-            "detect_form": _derive_polyset_form(members),
-        }
+        if polyset_id in explicit_polysets_by_id:
+            polyset = dict(explicit_polysets_by_id[polyset_id])
+            if polyset["member_e_ids"] != member_e_ids:
+                declared = ";".join(polyset["member_e_ids"])
+                discovered = ";".join(member_e_ids)
+                warnings.append(
+                    f"polysets ps_id={polyset_id} member order differs from items order: declared={declared}, items={discovered}"
+                )
+            polyset.setdefault("detect_form", polyset["canonical_form"])
+        else:
+            polyset = {
+                "ps_id": polyset_id,
+                "polyset_id": polyset_id,
+                "primary_e_id": member_e_ids[0] if member_e_ids else None,
+                "member_e_ids": member_e_ids,
+                "canonical_form": _derive_polyset_form(members),
+                "detect_form": _derive_polyset_form(members),
+                "gloss_intro": None,
+                "encoder_gloss": _join_encoder_gloss(None, members),
+                "note": None,
+                "detect_ruleset_id": None,
+                "verify_ruleset_id": None,
+            }
+        polyset["detect_form"] = polyset.get("detect_form") or polyset.get("canonical_form")
+        polysets_by_id[polyset_id] = polyset
 
     runtime_units: dict[str, dict[str, Any]] = {}
     for e_id, item in items_by_e_id.items():
-        if item["group"] == "c" and item.get("polyset_id"):
+        if item["group"] == "c" and (item.get("ps_id") or item.get("polyset_id")):
             continue
         detect_ruleset_ids = [item["detect_ruleset_id"]] if item.get("detect_ruleset_id") else []
         verify_ruleset_ids = [item["verify_ruleset_id"]] if item.get("verify_ruleset_id") else []
@@ -391,14 +524,19 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
 
     for polyset_id, polyset in polysets_by_id.items():
         members = [items_by_e_id[e_id] for e_id in polyset["member_e_ids"]]
-        detect_ruleset_ids = [member["detect_ruleset_id"] for member in members if member.get("detect_ruleset_id")]
-        verify_ruleset_ids = [member["verify_ruleset_id"] for member in members if member.get("verify_ruleset_id")]
+        detect_ruleset_ids = [polyset["detect_ruleset_id"]] if polyset.get("detect_ruleset_id") else [
+            member["detect_ruleset_id"] for member in members if member.get("detect_ruleset_id")
+        ]
+        verify_ruleset_ids = [polyset["verify_ruleset_id"]] if polyset.get("verify_ruleset_id") else [
+            member["verify_ruleset_id"] for member in members if member.get("verify_ruleset_id")
+        ]
         runtime_units[polyset_id] = {
             "unit_id": polyset_id,
             "unit_type": "polyset",
             "group": "c",
             "member_e_ids": polyset["member_e_ids"],
-            "canonical_form": polyset["detect_form"],
+            "canonical_form": polyset.get("canonical_form") or polyset["detect_form"],
+            "gloss": polyset.get("encoder_gloss"),
             "detect_ruleset_ids": detect_ruleset_ids,
             "verify_ruleset_ids": verify_ruleset_ids,
         }
