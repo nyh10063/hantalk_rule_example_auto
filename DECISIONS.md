@@ -212,3 +212,33 @@ Reason: 기존 2024년 신문 통합 파일은 행 수가 매우 커서 prepared
 ### Decision: 예문 구축 검색 산출물은 item별 artifact 폴더에 저장한다.
 
 Reason: 300개 문법항목으로 확장하면 `HanTalk_arti/example_making` 한 폴더에 모든 detection JSONL, human review CSV/XLSX, summary JSON이 섞여 관리가 어려워진다. 공통 prepared corpus는 여러 문법항목이 공유해야 하므로 `HanTalk_work/corpus/example_making/prepared`에 그대로 두고, 문법항목별 검색 산출물은 `HanTalk_arti/example_making/{item_id}/` 아래에 저장한다. `src/search_corpus.py`와 `src/summarize_review.py`는 `--artifact-root .../example_making`을 받으면 item별 폴더와 파일명을 자동으로 파생한다.
+
+## 2026-05-03
+
+### Decision: 인코더 학습 예문은 Excel이 아니라 JSONL을 기계친화 SSOT로 둔다.
+
+Reason: Excel은 사람이 검수하고 확인하기에는 좋지만, 학습 loop나 HanTalk 실시간 사용자 발화 처리 경로에서 읽기에는 느리고 구조가 흔들릴 수 있다. 따라서 `*_encoder_examples.xlsx`는 사람이 확인하는 gold-like 사본으로만 두고, 인코더 학습과 이후 runtime pair 입력 생성은 `*_encoder_pair_examples.jsonl`과 `configs/detector/detector_bundle.json`을 기준으로 한다. `text_b`는 `dict.xlsx`를 직접 읽지 않고 bundle의 `canonical_form`과 `gloss`에서 생성한다.
+
+### Decision: HanTalk 인코더 예문 export에서는 `conf_e_id`, `neg_boundary`, `neg_confusable`를 사용하지 않는다.
+
+Reason: 이번 HanTalk Phase 1의 df003은 다의의미 분별이 아니라 오탐 제거용 binary filtering task이다. 사람이 확정한 TP는 label 1, FP는 label 0의 `neg_target_absent`로 처리하고, FP 문장의 detector span을 그대로 보존한다. 이전 프로젝트의 confusable negative나 boundary negative는 새 예문 export 경로에 포함하지 않는다.
+
+### Decision: 새 HanTalk span 문자열 표현은 JSON list 형식으로 통일한다.
+
+Reason: `[(10,13),(15,16)]` 같은 Python literal 형식은 사람이 보기에는 익숙하지만 JSONL, 웹, 다른 언어, 자동 검증 코드와 연결할 때 불리하다. 따라서 새로 생성하는 HanTalk Excel/CSV cell의 `span_segments`는 `[[10,13],[15,16]]` 형식으로 쓰고, JSONL에서는 실제 list로 저장한다. parser는 과거 호환을 위해 Python tuple 형식도 읽지만 writer는 JSON list 형식만 출력한다.
+
+### Decision: 인코더 예문 split은 `example_role`별 stable hash로 배정한다.
+
+Reason: positive 전체와 negative 전체만 나누면 `pos_conti`, `pos_disconti`, `neg_target_absent`가 특정 split에 몰릴 수 있다. 따라서 `src.export_encoder_examples`는 role별로 stable hash 정렬을 한 뒤 train/dev/test를 배정한다. role count가 10개 미만이면 dev/test를 억지로 만들지 않고 train에 두며 warning을 남긴다.
+
+### Decision: HanTalk binary encoder 학습 실행 파일은 pair-mode 완전판 v1로 만든다.
+
+Reason: 이전 A그룹 프로젝트에서 성공한 구조는 span-marked sentence와 문법항목 설명을 pair input으로 넣고, encoder의 masked mean pooling 출력에 binary head를 붙여 BCEWithLogitsLoss로 학습하는 방식이었다. HanTalk에서도 이 검증된 구조를 유지하되, Excel을 학습 경로에서 제거하고 `*_encoder_pair_examples.jsonl`을 기계친화 SSOT로 사용한다. 학습 실행 파일 `src/train_encoder_pair.py`는 모델 backbone을 고정하지 않고 `AutoModel` 기반으로 받아 F1=1을 달성 가능한 모델 중 응답속도가 가장 빠른 모델을 찾을 수 있게 한다.
+
+### Decision: encoder checkpoint artifact 명칭은 `head.pt`로 유지한다.
+
+Reason: 이전 A그룹 프로젝트와 추론 설명에서 binary classifier layer를 head로 불렀고, inference에서도 head logits를 기준으로 오탐 여부를 판단했다. 따라서 내부 구현 클래스명이 classifier와 유사하더라도 artifact 파일명은 `head.pt`로 저장한다. 이렇게 하면 기존 성공 구조와 HanTalk runtime 로딩 규칙이 일관된다.
+
+### Decision: encoder 학습 report에는 truncation과 end-to-end speed 측정을 반드시 기록한다.
+
+Reason: HanTalk의 목표는 응답속도가 빠른 범위에서 성능을 올리는 것이다. pair input에서 `[SPAN]...[/SPAN]` marker나 핵심 span이 max length 때문에 잘리면 모델 성능이 흔들릴 수 있으므로 split별 truncation 통계를 저장한다. 또한 모델 비교의 기준이 성능뿐 아니라 응답속도이므로 `avg_inference_example_sec`를 기록하되, 초기 측정은 tokenization, collator, DataLoader overhead를 포함한 end-to-end eval latency임을 report에 명시한다.

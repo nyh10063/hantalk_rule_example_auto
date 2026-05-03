@@ -5,7 +5,7 @@
 - Current phase: Phase 1 pilot
 - Current item: df003 `ㄴ/은 적 있/없`
 - Current project goal: 300개 문법항목의 검색용 정규식 및 오탐 필터링 인코더용 positive/negative 예문 구축 자동화
-- Current immediate goal: df003 batch_001 human review를 진행하고 batch_000+batch_001 누적 TP/FP를 확인하기
+- Current immediate goal: df003 batch_002 human review 파일을 사람이 TP/FP/span 검수하고, labeled 파일로 저장한 뒤 누적 positive/negative 개수를 확인하기
 
 ## 현재까지 완료
 
@@ -125,6 +125,48 @@
   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_001_detection.jsonl`
   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_001_human_review.csv`
   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003_batch_001_search_report.json`
+- `src/detector/span_utils.py`에 HanTalk span/parser writer 유틸을 추가함
+  - `parse_span_segments`
+  - `format_span_segments`
+  - `inject_span_markers`
+  - 새 출력은 `[[10,13],[15,16]]` JSON list 형식으로 통일하고, 기존 `[(10,13),(15,16)]` 형식도 읽을 수 있게 함
+- `src/export_encoder_examples.py` 구현 완료
+  - labeled review `.xlsx`/`.csv`를 읽어 인코더 pair-mode 학습 예문으로 변환함
+  - `text_b`는 `dict.xlsx`가 아니라 `configs/detector/detector_bundle.json`의 `canonical_form`과 `gloss`에서 생성함
+  - TP는 `label=1`, FP는 `label=0` 및 `example_role=neg_target_absent`로 변환함
+  - `conf_e_id`, `neg_boundary`, `neg_confusable`는 새 export 경로에서 사용하지 않음
+  - Excel 출력 열도 `gold_example_role`이 아니라 새 HanTalk key인 `example_role`을 사용함
+  - `span_status=span_wrong`이고 `corrected_span_segments`가 있으면 corrected span을 우선 사용함
+  - `example_id`는 `df003-pos-0001`, `df003-neg-0001` 같은 소문자 짧은 형식으로 생성함
+  - `pos_conti`, `pos_disconti`, `neg_target_absent`별 stable hash split을 적용함
+- df003 batch_000 labeled review 파일에서 인코더 예문 산출물을 생성함:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_examples.xlsx`
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_pair_examples.jsonl`
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_examples_summary.json`
+- `src/train_encoder_pair.py` 구현 완료
+  - `*_encoder_pair_examples.jsonl`만 읽고 Excel은 학습 경로에서 읽지 않음
+  - `AutoModel + masked_mean/cls pooling + Linear head + BCEWithLogitsLoss` 구조를 사용함
+  - checkpoint는 `encoder/`, `tokenizer/`, `head.pt`, `runtime_encoder_config.json`, `checkpoint_meta.json` 구조로 저장함
+  - W&B는 `disabled/offline/online` 옵션을 지원하고 기본값은 `disabled`임
+  - truncation 통계, speed metrics, debug predictions, data summary, metrics by epoch를 저장하도록 구현함
+  - train만 seed 기반 shuffle을 사용하고 dev/test는 고정 순서로 평가함
+- `src/train_encoder_pair.py` 운영 안전장치 보강 완료
+  - 학습 경로에서 `seed_state`, tokenization, device, model info, optimizer info가 포함된 최종 `train_config.json`을 다시 저장함
+  - CLI 값 범위 검증을 추가함
+  - `input_construction_version=hantalk_binary_pair_v1` 검증을 fatal error로 추가함
+  - `--max-saved-prediction-rows`로 prediction/debug 파일 저장 행 수를 제한할 수 있게 함
+  - `--log-every-steps`로 step 단위 train loss를 `train_step_log.jsonl`과 W&B에 기록할 수 있게 함
+- batch_002 검색 전 detector bundle 재생성과 df003 gold test를 완료함
+- batch_002 prepared corpus 생성 완료:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_002.jsonl`
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_002_report.json`
+  - 구성: 일상대화 5,000행, 뉴스 700행, 비출판물 2,000행, 학습자 말뭉치 2,500행
+- 확정된 df003 detector bundle로 batch_002 검색 완료:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_002_detection.jsonl`
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_002_human_review.csv`
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_002_search_report.json`
+  - 후보 수: 142개
+  - 후보 출처: 일상대화 57개, 뉴스 46개, 비출판물 29개, 학습자 말뭉치 10개
 
 ## 이번에 테스트한 것
 
@@ -318,6 +360,32 @@
   - candidates: 182
   - candidates by domain: `daily_conversation=59`, `news=89`, `non_published=29`, `learner_spoken_5_6=5`
   - span source counts: `component_spans=85`, `regex_match_fallback=97`
+- `python3 -m py_compile src/detector/span_utils.py src/export_encoder_examples.py` 통과
+- `/private/tmp` smoke export에서 `df003_batch_000_human_review_labeled.xlsx` 145행을 모두 인코더 예문으로 변환함:
+  - positive: 60
+  - negative: 85
+  - role counts: `pos_conti=18`, `pos_disconti=42`, `neg_target_absent=85`
+  - split counts: `train=117`, `dev=14`, `test=14`
+  - JSONL에 `conf_e_id`가 없고 `span_segments`가 실제 list로 저장됨을 확인함
+  - Excel sheet `examples`에 `conf_e_id`가 없고 `span_segments`가 `[[23,26],[28,29]]` 형식으로 저장됨을 확인함
+  - 같은 seed/입력으로 JSONL을 재생성했을 때 SHA-256이 동일함을 확인함
+- 실제 artifact 폴더에 df003 인코더 예문 산출물을 생성함:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_examples.xlsx`
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_pair_examples.jsonl`
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_examples_summary.json`
+- `python3 -m py_compile src/train_encoder_pair.py` 통과
+- `python3 -m src.train_encoder_pair --help` 출력 확인
+- `src.train_encoder_pair` validate-only 경로에서 새 옵션(`--max-saved-prediction-rows`, `--log-every-steps`)과 최종 `train_config.json` 저장을 확인함
+- 잘못된 CLI 값 검증 확인:
+  - `--threshold 2` 실행 시 `[ERROR] --threshold must be between 0 and 1`로 실패함
+- 모델 다운로드 없이 `/private/tmp`에서 validate-only 실행을 확인함:
+  - command: `python3 -m src.train_encoder_pair --examples-jsonl /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_pair_examples.jsonl --out-dir /private/tmp/hantalk_train_encoder_pair_validate --model-name-or-path local-placeholder-model --seed 42 --shuffle-seed 42 --validate-only --skip-tokenization-stats --overwrite`
+  - output files:
+    - `/private/tmp/hantalk_train_encoder_pair_validate/train_config.json`
+    - `/private/tmp/hantalk_train_encoder_pair_validate/data_summary.json`
+    - `/private/tmp/hantalk_train_encoder_pair_validate/train_encoder_pair_report.json`
+  - data summary: total 145, train 117, dev 14, test 14, positive 60, negative 85
+  - train/dev/test 모두 label 0/1을 포함함
 - `python3 -m py_compile src/prepare_example_corpus.py` 통과
 - 새 sampling schedule 검증을 위해 `/private/tmp`에 batch_002 ratio check 산출물을 임시 생성함:
   - total: 10,200
@@ -350,17 +418,22 @@
   - 예: `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_002_human_review.csv`
 ## 다음 작업
 
-1. 사람이 batch_001 검수 후 아래 이름으로 labeled 파일을 저장함
-   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_001_human_review_labeled.xlsx`
+1. 사람이 batch_002 검수 후 아래 이름으로 labeled 파일을 저장함
+   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_002_human_review_labeled.xlsx`
    - 필요 시 CSV 사본:
-     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_001_human_review_labeled.csv`
-2. batch_000 + batch_001을 `summarize_review.py`로 함께 집계함
-   - `positive_100=true`, `negative_100=true`이면 df003 예문 수집을 멈추고 encoder 후보 export 단계로 넘어감
-   - 부족하면 batch_002부터 같은 루프를 반복함
+     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_002_human_review_labeled.csv`
+2. batch_000 labeled + batch_002 labeled을 `summarize_review.py`로 함께 집계함
+   - batch_001 labeled 파일이 이미 있거나 나중에 확정되면 함께 추가해 누적 집계함
+   - `positive_100=true`, `negative_100=true`이면 df003 예문 수집을 멈추고 encoder pair examples를 갱신함
+   - 부족하면 batch_003부터 같은 루프를 반복함
+3. 충분한 labeled 파일이 준비되면 `src.export_encoder_examples`를 누적 입력으로 다시 실행해 `df003_encoder_pair_examples.jsonl`을 갱신함
+4. positive/negative가 각각 100개 이상 모이면 `src/train_encoder_pair.py`로 validate-only를 다시 실행하고, 이후 선택한 encoder backbone으로 정식 학습을 실행함
 
 ## 주의사항
 
 - 현재는 인코더 fine-tuning을 하지 않습니다.
+- 현재 구현한 것은 인코더 학습 실행이 아니라 pair-mode 학습 예문 export입니다.
+- `src/train_encoder_pair.py`는 구현되어 있지만, 현재 batch_000 기준 positive=60/negative=85이므로 정식 학습은 아직 권장하지 않습니다. smoke나 validate-only는 가능하지만 논문/실험용 학습은 positive/negative 각각 100개 이상을 확보한 뒤 실행합니다.
 - Phase 1에서는 Label Studio, Prefect, DVC, MLflow를 도입하지 않습니다.
 - LLM이 만든 TP/FP 판단은 임시 참고용이며 gold label이 아닙니다.
 - 사람이 만든 gold와 human review 파일은 명시 요청 없이 덮어쓰지 않습니다.

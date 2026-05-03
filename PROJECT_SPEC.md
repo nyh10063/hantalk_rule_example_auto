@@ -290,7 +290,9 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 | `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_human_review_labeled.xlsx` | 사람이 확정한 TP/FP/span 검수 완료본 | 사람 | `summarize_review.py`, dataset export CLI |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_human_review_labeled.csv` | 사람이 확정한 TP/FP/span 검수 완료본의 CSV 사본 | 사람 또는 자동 변환 | `summarize_review.py`, dataset export CLI |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_review_summary.json` | labeled review 파일 누적 집계와 목표 달성 여부 | 자동화 | 사람 + 다음 batch 판단 |
-| `datasets/df003_encoder_candidates.jsonl` | 인코더 학습 후보 데이터 | 자동화 | 향후 fine-tuning |
+| `HanTalk_arti/example_making/{item_id}/{item_id}_encoder_examples.xlsx` | 인코더 학습 예문 사람이 확인하는 gold-like Excel 사본 | 자동화 | 사람 확인 |
+| `HanTalk_arti/example_making/{item_id}/{item_id}_encoder_pair_examples.jsonl` | 인코더 pair-mode 학습용 기계친화 예문 SSOT | 자동화 | 향후 `train_encoder_pair.py` |
+| `HanTalk_arti/example_making/{item_id}/{item_id}_encoder_examples_summary.json` | 인코더 예문 export 요약, split/role 분포, 목표 달성 여부 | 자동화 | 사람 + 학습 실행 판단 |
 | `logs/df003_regex_iterations.jsonl` | FN 분석과 수정 이력 | 자동화 | 사람 + Codex |
 
 
@@ -780,10 +782,14 @@ span_wrong
 not_applicable
 ```
 
-## `datasets/df003_encoder_candidates.jsonl` schema
+## `{item_id}_encoder_pair_examples.jsonl` schema
+
+인코더 학습 경로에서는 Excel을 읽지 않습니다. 사람이 검수하거나 확인하는 파일은 `.xlsx`/`.csv`로 유지하되, 학습과 이후 runtime 입력 생성은 `detector_bundle.json`과 `encoder_pair_examples.jsonl`을 기준으로 합니다.
+
+`text_b`는 `datasets/dict/dict.xlsx`를 직접 읽지 않고 `configs/detector/detector_bundle.json`의 `items_by_e_id[item_id].canonical_form`과 `gloss`에서 생성합니다.
 
 ```json
-{"unit_id":"df003","origin_e_id":"df003","unit_type":"item","member_e_ids":["df003"],"group":"b","canonical_form":"ㄴ/은 적 있/없","example_id":"df003-TP-001","raw_text":"저는 제주도에 가 본 적이 있어요.","span_segments":[[10,13],[15,16]],"span_key":"10:13|15:16","span_text":"본 적 ... 있","label":1,"source_hit_id":"df003-HIT-0001","detect_rule_ids":["r_df003_d01"]}
+{"schema_version":"hantalk_encoder_pair_example_v1","input_construction_version":"hantalk_binary_pair_v1","item_id":"df003","example_id":"df003-pos-0001","label":1,"label_name":"positive","example_role":"pos_disconti","negative_type":null,"split":"train","text_a":"저는 제주도에 가 [SPAN]본 적[/SPAN]이 [SPAN]있[/SPAN]어요.","text_b":"ㄴ/은 적 있/없\n어떤 행위나 상태를 해 본 경험이 있거나 없음을 나타냄.","raw_text":"저는 제주도에 가 본 적이 있어요.","span_segments":[[10,13],[15,16]],"span_key":"10:13|15:16","span_text":"본 적 ... 있","canonical_form":"ㄴ/은 적 있/없","gloss":"어떤 행위나 상태를 해 본 경험이 있거나 없음을 나타냄.","pattern_type":"disconti","source_hit_id":"daily_conversation_b000_000001-cand01","corpus_domain":"daily_conversation","detect_rule_ids":["r_df003_d01"]}
 ```
 
 `label` 값:
@@ -791,15 +797,149 @@ not_applicable
 - `1`: positive / TP
 - `0`: negative / FP
 
+`example_role` 값:
+
+- `pos_conti`: TP이며 span segment가 1개인 예문
+- `pos_disconti`: TP이며 span segment가 2개 이상인 예문
+- `neg_target_absent`: FP 예문. detector가 잡은 span을 그대로 보존하되 label은 0으로 둠
+
+원칙:
+
+- 새 HanTalk 산출물의 span 문자열 표현은 JSON list 형식인 `[[10,13],[15,16]]`으로 통일합니다.
+- parser는 과거 호환을 위해 `[(10,13),(15,16)]`도 읽을 수 있지만, writer는 항상 JSON list 형식만 출력합니다.
+- `conf_e_id`, `neg_boundary`, `neg_confusable`는 새 HanTalk 인코더 예문 export 경로에서 사용하지 않습니다.
+- split은 `pos_conti`, `pos_disconti`, `neg_target_absent` role별 stable hash 정렬 후 배정합니다.
+- 학습용 `.jsonl`은 기계친화 SSOT이고, `.xlsx`는 사람이 확인하기 위한 gold-like 사본입니다.
+
+## `src/train_encoder_pair.py` 학습 실행 파일
+
+HanTalk binary encoder 학습은 `src/train_encoder_pair.py`를 기준 실행 파일로 합니다. 이 스크립트는 Excel을 읽지 않고, `src.export_encoder_examples`가 생성한 `{item_id}_encoder_pair_examples.jsonl`만 학습 입력으로 사용합니다.
+
+모델 구조:
+
+```text
+AutoTokenizer
+AutoModel
+→ pooling(masked_mean 기본, cls 선택 가능)
+→ Linear(hidden_size, 1) head
+→ BCEWithLogitsLoss
+→ sigmoid + threshold=0.5 평가
+```
+
+기본 원칙:
+
+- backbone은 `--model-name-or-path`로 지정하며 특정 모델에 고정하지 않습니다.
+- tokenizer는 `--tokenizer-name-or-path`가 없으면 model path를 그대로 사용합니다.
+- 목표는 F1=1을 달성할 수 있는 모델 중 응답속도가 가장 빠른 모델을 찾는 것입니다.
+- train DataLoader만 seed 기반 shuffle을 사용하고, dev/test는 debug prediction 재현성을 위해 고정 순서로 평가합니다.
+- best checkpoint는 `dev_loss_mean` 최소, 동률이면 `dev_balanced_acc` 최대, 다시 동률이면 earlier epoch 기준으로 선택합니다.
+- dev split은 정식 학습에서 필수입니다. train/dev에는 label 0/1이 모두 있어야 합니다.
+- test split에 label 0/1 중 한쪽이 없으면 기본 warning이며, `--strict-splits`에서는 fatal로 처리합니다.
+
+주요 CLI 예:
+
+```bash
+python3 -m src.train_encoder_pair \
+  --examples-jsonl /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_pair_examples.jsonl \
+  --out-dir /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/models/df003_encoder_pair_klue_roberta_base \
+  --model-name-or-path klue/roberta-base \
+  --seed 42 \
+  --shuffle-seed 42 \
+  --batch-size 8 \
+  --eval-batch-size 16 \
+  --epochs 10 \
+  --lr 2e-5 \
+  --weight-decay 0.01 \
+  --warmup-ratio 0.0 \
+  --max-length 256 \
+  --threshold 0.5 \
+  --early-stop-patience 4 \
+  --wandb-mode disabled
+```
+
+학습 실행 전 데이터 검증만 할 때:
+
+```bash
+python3 -m src.train_encoder_pair \
+  --examples-jsonl /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_pair_examples.jsonl \
+  --out-dir /private/tmp/hantalk_train_encoder_pair_validate \
+  --model-name-or-path klue/roberta-base \
+  --seed 42 \
+  --shuffle-seed 42 \
+  --validate-only \
+  --overwrite
+```
+
+학습 산출물:
+
+```text
+out_dir/
+  train_config.json
+  data_summary.json
+  metrics_by_epoch.jsonl
+  train_log.jsonl
+  train_encoder_pair_report.json
+  checkpoints/
+    best/
+      encoder/
+      tokenizer/
+      head.pt
+      runtime_encoder_config.json
+      checkpoint_meta.json
+    last/
+      encoder/
+      tokenizer/
+      head.pt
+      runtime_encoder_config.json
+      checkpoint_meta.json
+  predictions/
+    dev_predictions_epoch_###.jsonl
+    test_predictions_best.jsonl
+    test_errors_best.jsonl
+  debug/
+    debug_predictions_latest.jsonl
+    debug_predictions_latest.csv
+```
+
+`runtime_encoder_config.json`은 나중 HanTalk runtime이 오늘의 대화 맥락 없이도 같은 방식으로 inference를 재현하기 위한 파일입니다. 반드시 아래 정보를 포함합니다.
+
+```json
+{"schema_version":"hantalk_runtime_encoder_config_v1","input_construction_version":"hantalk_binary_pair_v1","span_marker_style":"[SPAN]...[/SPAN]","model_type":"pair_binary_encoder","pooling":"masked_mean","threshold":0.5,"max_length":256,"encoder_path":"encoder","tokenizer_path":"tokenizer","head_path":"head.pt"}
+```
+
+학습 report는 성능뿐 아니라 속도 지표도 기록합니다.
+
+```text
+n_parameters
+n_trainable_parameters
+device
+avg_train_step_sec
+avg_eval_batch_sec
+avg_inference_example_sec
+eval_examples_per_sec
+```
+
+초기 speed 측정은 tokenizer/collator/DataLoader overhead를 포함한 end-to-end eval latency로 기록하며, report에 `includes_tokenization=true`, `includes_dataloader_overhead=true`를 명시합니다.
+
+또한 tokenizer truncation 위험을 확인하기 위해 split별 truncation 통계를 저장합니다.
+
+```text
+n_truncated_train/dev/test
+truncation_rate
+max_tokenized_length_observed
+truncated_examples_sample
+```
+
 ## Phase 1 CLI 목표
 
 Phase 1에서 최종적으로 아래 명령이 동작하는 것을 목표로 합니다.
 
 ```bash
 python3 src/test_gold.py --item-id df003 --bundle configs/detector/detector_bundle.json --active-unit-id df003 --fail-on-fn
-python3 -m src.search_corpus --item-id df003 --corpus news --batch-size 5000
-python3 -m src.export_review_sheet --item-id df003
-python3 -m src.export_encoder_data --item-id df003 --pos 100 --neg 100
+python3 -m src.prepare_example_corpus --manifest configs/corpus/example_making_manifest.json --corpus-root /Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making --batch-index 2 --out /Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_002.jsonl --report /Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_002_report.json
+python3 -m src.search_corpus --bundle configs/detector/detector_bundle.json --input-jsonl /Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_002.jsonl --active-unit-id df003 --artifact-root /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making
+python3 -m src.summarize_review --item-id df003 --input /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_002_human_review_labeled.xlsx --artifact-root /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making
+python3 -m src.export_encoder_examples --item-id df003 --bundle configs/detector/detector_bundle.json --input /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_000_human_review_labeled.xlsx --artifact-root /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making
 ```
 
 실제 모듈명과 명령어는 구현 과정에서 조정할 수 있지만, 조정 시 이 문서를 업데이트해야 합니다.
