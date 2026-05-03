@@ -2,8 +2,8 @@
   "schema_version": "hantalk_detector_bundle_v1",
   "source": {
     "dict_xlsx": "datasets/dict/dict_ps_ce002.xlsx",
-    "source_sha256": "66b79d256116368cbcde828ca50b1ef47b65a33798a75dcb7264b6e5c41e6a75",
-    "generated_at": "2026-05-03T12:25:29.521022+00:00"
+    "source_sha256": "9b3943651bfd86cb152512a82797cba966d6bf2603af75c5397b5ac11302c094",
+    "generated_at": "2026-05-03T13:13:02.004052+00:00"
   },
   "items_by_e_id": {
     "ce002": {
@@ -40,12 +40,12 @@
     }
   },
   "components_by_e_id": {
-    "ce002": [
+    "ps_ce002": [
       {
-        "e_id": "ce002",
-        "unit_id": "ce002",
-        "source_e_id": "ce002",
-        "ps_id": null,
+        "e_id": "ps_ce002",
+        "unit_id": "ps_ce002",
+        "source_e_id": null,
+        "ps_id": "ps_ce002",
         "comp_surf": "ㄴ/은/는데",
         "comp_id": "c1",
         "is_required": true,
@@ -54,28 +54,18 @@
         "order_policy": "fx",
         "min_gap_to_next": null,
         "max_gap_to_next": null,
-        "bridge_id": null
-      }
-    ],
-    "ce003": [
-      {
-        "e_id": "ce003",
-        "unit_id": "ce003",
-        "source_e_id": "ce003",
-        "ps_id": null,
-        "comp_surf": "ㄴ/은/는데",
-        "comp_id": "c1",
-        "is_required": true,
-        "anchor_rank": 1,
-        "comp_order": 1,
-        "order_policy": "fx",
-        "min_gap_to_next": null,
-        "max_gap_to_next": null,
-        "bridge_id": null
+        "bridge_id": "nde"
       }
     ]
   },
-  "bridges_by_id": {},
+  "bridges_by_id": {
+    "nde": {
+      "bridge_id": "nde",
+      "version": "v1",
+      "requires_morph": false,
+      "description": "Recover ㄴ/은/는데 component spans, including spaced forms and final-ㄴ syllable + 데."
+    }
+  },
   "rules_by_ruleset_id": {
     "rs_ps_ce002_d01": [
       {
@@ -106,6 +96,10 @@
         "ce003"
       ],
       "canonical_form": "ㄴ/은/는데",
+      "disconti_allowed": false,
+      "ps_comp_ids": [
+        "c1"
+      ],
       "gloss_intro": "다음 의미를 포함하는 연결어미:",
       "encoder_gloss": "다음 의미를 포함하는 연결어미: 앞절의 상황·배경을 제시하고 뒤절로 이어지게 하는 연결어미; 앞절과 뒤절이 대조·대립 혹은 양보적 전환, 반전되는 관계로 이어질 때 쓰는 연결어미",
       "note": null,

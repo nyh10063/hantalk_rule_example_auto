@@ -29,10 +29,6 @@ REQUIRED_COLUMNS = {
         "e_id",
         "canonical_form",
         "group",
-        "disconti_allowed",
-        "e_comp_id",
-        "detect_ruleset_id",
-        "verify_ruleset_id",
         "gloss",
     },
     "rule_components": {
@@ -227,6 +223,36 @@ def _join_encoder_gloss(gloss_intro: str | None, member_items: list[dict[str, An
     return joined
 
 
+def _polyset_component_ids(row: dict[str, Any]) -> list[str]:
+    return (
+        _split_ids(row.get("ps_comp_id"))
+        or _split_ids(row.get("component_ids"))
+        or _split_ids(row.get("e_comp_id"))
+    )
+
+
+def _validate_ruleset_unit(
+    *,
+    owner_kind: str,
+    owner_id: str,
+    ruleset_id: str,
+    expected_unit_id: str,
+    expected_stage: str,
+    rules_by_ruleset_id: dict[str, list[dict[str, Any]]],
+) -> None:
+    rules = [rule for rule in rules_by_ruleset_id.get(ruleset_id, []) if rule.get("stage") == expected_stage]
+    if not rules:
+        raise BundleExportError(
+            f"{owner_kind} {owner_id} {expected_stage}_ruleset_id has no {expected_stage} rules: {ruleset_id}"
+        )
+    wrong_units = sorted({str(rule.get("unit_id") or rule.get("e_id")) for rule in rules if str(rule.get("unit_id") or rule.get("e_id")) != expected_unit_id})
+    if wrong_units:
+        raise BundleExportError(
+            f"{owner_kind} {owner_id} {expected_stage}_ruleset_id={ruleset_id} contains rules for other unit_id values: "
+            f"{', '.join(wrong_units)}; expected {expected_unit_id}"
+        )
+
+
 def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
     workbook = load_workbook(dict_xlsx, read_only=True, data_only=True)
     _check_required_structure(workbook)
@@ -307,6 +333,8 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
             "primary_e_id": primary_e_id,
             "member_e_ids": member_e_ids,
             "canonical_form": _required_text(row, "ps_canonical_form", sheet="polysets", row_no=row_no),
+            "disconti_allowed": _bool_value(row.get("disconti_allowed"), sheet="polysets", row_no=row_no, key="disconti_allowed"),
+            "ps_comp_ids": _polyset_component_ids(row),
             "gloss_intro": gloss_intro,
             "encoder_gloss": _join_encoder_gloss(gloss_intro, member_items),
             "note": _text(row.get("note")),
@@ -432,25 +460,45 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
         detect_ruleset_id = item.get("detect_ruleset_id")
         verify_ruleset_id = item.get("verify_ruleset_id")
         if detect_ruleset_id:
-            detect_rules = [rule for rule in rules_by_ruleset_id.get(detect_ruleset_id, []) if rule.get("stage") == "detect"]
-            if not detect_rules:
-                raise BundleExportError(f"items e_id={e_id} detect_ruleset_id has no detect rules: {detect_ruleset_id}")
+            _validate_ruleset_unit(
+                owner_kind="items e_id",
+                owner_id=e_id,
+                ruleset_id=detect_ruleset_id,
+                expected_unit_id=e_id,
+                expected_stage="detect",
+                rules_by_ruleset_id=rules_by_ruleset_id,
+            )
         if verify_ruleset_id:
-            verify_rules = [rule for rule in rules_by_ruleset_id.get(verify_ruleset_id, []) if rule.get("stage") == "verify"]
-            if not verify_rules:
-                raise BundleExportError(f"items e_id={e_id} verify_ruleset_id has no verify rules: {verify_ruleset_id}")
+            _validate_ruleset_unit(
+                owner_kind="items e_id",
+                owner_id=e_id,
+                ruleset_id=verify_ruleset_id,
+                expected_unit_id=e_id,
+                expected_stage="verify",
+                rules_by_ruleset_id=rules_by_ruleset_id,
+            )
 
     for ps_id, polyset in explicit_polysets_by_id.items():
         detect_ruleset_id = polyset.get("detect_ruleset_id")
         verify_ruleset_id = polyset.get("verify_ruleset_id")
         if detect_ruleset_id:
-            detect_rules = [rule for rule in rules_by_ruleset_id.get(detect_ruleset_id, []) if rule.get("stage") == "detect"]
-            if not detect_rules:
-                raise BundleExportError(f"polysets ps_id={ps_id} detect_ruleset_id has no detect rules: {detect_ruleset_id}")
+            _validate_ruleset_unit(
+                owner_kind="polysets ps_id",
+                owner_id=ps_id,
+                ruleset_id=detect_ruleset_id,
+                expected_unit_id=ps_id,
+                expected_stage="detect",
+                rules_by_ruleset_id=rules_by_ruleset_id,
+            )
         if verify_ruleset_id:
-            verify_rules = [rule for rule in rules_by_ruleset_id.get(verify_ruleset_id, []) if rule.get("stage") == "verify"]
-            if not verify_rules:
-                raise BundleExportError(f"polysets ps_id={ps_id} verify_ruleset_id has no verify rules: {verify_ruleset_id}")
+            _validate_ruleset_unit(
+                owner_kind="polysets ps_id",
+                owner_id=ps_id,
+                ruleset_id=verify_ruleset_id,
+                expected_unit_id=ps_id,
+                expected_stage="verify",
+                rules_by_ruleset_id=rules_by_ruleset_id,
+            )
 
     for ruleset_id, rules in rules_by_ruleset_id.items():
         stages = {rule["stage"] for rule in rules}
@@ -466,7 +514,7 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
     }
     referenced_rulesets.discard(None)
     for ruleset_id in sorted(all_ruleset_ids - referenced_rulesets):
-        warnings.append(f"ruleset_id not referenced by items: {ruleset_id}")
+        warnings.append(f"ruleset_id not referenced by items/polysets: {ruleset_id}")
 
     polyset_members: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for item in items_by_e_id.values():
@@ -497,6 +545,8 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
                 "member_e_ids": member_e_ids,
                 "canonical_form": _derive_polyset_form(members),
                 "detect_form": _derive_polyset_form(members),
+                "disconti_allowed": any(bool(member.get("disconti_allowed")) for member in members),
+                "ps_comp_ids": sorted({comp_id for member in members for comp_id in member.get("e_comp_ids", [])}),
                 "gloss_intro": None,
                 "encoder_gloss": _join_encoder_gloss(None, members),
                 "note": None,

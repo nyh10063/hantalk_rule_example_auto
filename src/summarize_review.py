@@ -451,7 +451,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--target-pos", type=int, default=100)
     parser.add_argument("--target-neg", type=int, default=100)
-    parser.add_argument("--max-batches", type=int, default=5)
+    parser.add_argument("--max-batches", type=int, default=3)
     return parser
 
 

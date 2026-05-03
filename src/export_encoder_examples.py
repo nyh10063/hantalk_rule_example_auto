@@ -745,7 +745,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-neg", type=int, default=100)
     parser.add_argument("--target-pos", type=int, help="Alias for --min-pos. Takes precedence when provided.")
     parser.add_argument("--target-neg", type=int, help="Alias for --min-neg. Takes precedence when provided.")
-    parser.add_argument("--max-batches", type=int, default=5)
+    parser.add_argument("--max-batches", type=int, default=3)
     parser.add_argument("--seed", type=int, default=20260502)
     return parser
 

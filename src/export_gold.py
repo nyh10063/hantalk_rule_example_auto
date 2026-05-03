@@ -99,7 +99,9 @@ def _build_record(row: dict[str, Any], *, unit_id: str, example_index: int) -> d
         {"start": int(start), "end": int(end), "text": sentence[int(start) : int(end)]}
         for start, end in span_segments
     ]
-    member_e_ids = _split_ids(row.get("member_e_ids"))
+    member_e_ids = _split_ids(row.get("member_e_ids") or row.get("e_id"))
+    if not member_e_ids:
+        raise ValueError(f"gold row {row_no} member_e_ids must not be blank")
     pattern_type = _text(row.get("pattern_type")) or ("disconti" if len(span_segments) > 1 else "conti")
     example_no = _text(row.get("example_no")) or f"{example_index:03d}"
 
@@ -136,6 +138,8 @@ def export_gold(
     missing = sorted(required - set(headers))
     if missing:
         raise ValueError(f"{input_xlsx}:{sheet} missing required column(s): {', '.join(missing)}")
+    if "member_e_ids" not in headers and "e_id" not in headers:
+        raise ValueError(f"{input_xlsx}:{sheet} missing required column: member_e_ids")
     records = [_build_record(row, unit_id=unit_id, example_index=idx) for idx, row in enumerate(rows, start=1)]
     if expected_count is not None and len(records) != expected_count:
         raise ValueError(f"Expected {expected_count} gold rows for {unit_id}, found {len(records)}")

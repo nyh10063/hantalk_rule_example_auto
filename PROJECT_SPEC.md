@@ -216,12 +216,12 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 
 - `target_pos=100`
 - `target_neg=100`
-- `max_batches=5`
+- `max_batches=3`
 
 수집 중단 기준:
 
 - TP와 FP가 모두 목표 개수 이상이면 수집을 중단하고 encoder example export로 이동합니다.
-- 최대 5개 labeled batch를 처리했는데도 한쪽이 부족하면 무한히 batch를 추가하지 않고, 현재 확보량으로 encoder 필요성 또는 추가 전략을 재판단합니다.
+- 최대 3개 labeled batch를 처리했는데도 한쪽이 부족하면 무한히 batch를 추가하지 않고, 현재 확보량으로 encoder 필요성 또는 추가 전략을 재판단합니다.
 - `processed_batches`는 생성된 batch 수가 아니라, 실제 labeled review 입력으로 집계에 들어간 batch 수입니다. 예를 들어 batch_001 labeled 파일이 없고 batch_000과 batch_002만 사용하면 `processed_batches=2`입니다.
 
 원칙:
@@ -499,8 +499,9 @@ Component bridge 원칙:
 - `bridge_id`가 있으면 `src/detector/bridges.py`의 공용 matcher를 사용합니다.
 - 알 수 없는 `bridge_id`는 bundle export fatal error입니다.
 - bridge는 기본적으로 Kiwi 없이 문자 기반으로 구현합니다. 형태소 분석이 필요한 bridge는 예외로 분리하고, 응답속도 영향을 비교한 뒤 채택합니다.
-- 현재 구현된 bridge는 `adnominal_n`, `thing`입니다.
+- 현재 구현된 bridge는 `adnominal_n`, `nde`, `thing`입니다.
 - `adnominal_n`은 `본`, `간`, `한`처럼 종성 ㄴ을 가진 음절과 명시적 `은`/`ㄴ`을 가볍게 찾습니다.
+- `nde`는 `는데`, `은데`, `은 데`, `는 데`, `한데`처럼 `ㄴ/은/는데` 연결어미 component를 문자 기반으로 찾습니다.
 - `thing`은 향후 `것`, `거`, `게`, `건`, `걸`류 의존명사 구성 요소를 찾는 데 사용합니다.
 - 브릿지는 candidate를 직접 만들지 않고 component 후보 span만 반환합니다.
 - `src/detector/component_locator.py`가 `rule_components`와 bridge 후보를 조합하여 최종 component span을 만듭니다.

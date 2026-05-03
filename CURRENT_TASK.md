@@ -196,7 +196,7 @@
     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_pair_examples.jsonl`
     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_examples_summary.json`
 - 문법항목별 TP/FP 수집 정책을 코드와 문서에 반영함
-  - 기본 정책: `target_pos=100`, `target_neg=100`, `max_batches=5`
+  - 기본 정책: `target_pos=100`, `target_neg=100`, `max_batches=3`
   - `src/summarize_review.py`에 `--target-pos`, `--target-neg`, `--max-batches` 옵션을 추가함
   - review summary에 `collection_policy`와 `collection_status`를 추가함
   - `processed_batches`는 생성된 batch 수가 아니라, 실제 labeled review 입력으로 집계된 batch 수로 정의함
@@ -218,6 +218,11 @@
   - 현재 전체 aggregate는 df003만 포함함
 - ps_ce002 `ㄴ/은/는데` polyset task의 1차 자동화 경로를 열기 시작함
   - 입력 dict: `datasets/dict/dict_ps_ce002.xlsx`
+- `dict_ps_ce002.xlsx`의 `rule_components` 시트를 `ps_id=ps_ce002` 기준 1행으로 정리하고 `bridge_id=nde`를 연결함
+- `src/detector/bridges.py`에 Kiwi 없이 문자 기반으로 동작하는 `nde` bridge를 추가함
+- `src/detector/component_locator.py`에서 같은 거리의 component 후보는 더 긴 span을 우선하도록 보정해 `은`보다 `은데`/`은 데`가 선택되게 함
+- `configs/detector/detector_bundle_ps_ce002.json` 재생성 결과 `components_by_e_id["ps_ce002"]`와 `bridges_by_id["nde"]`가 정상 반영됨
+- ps_ce002 bundle gold 평가에서 `gold_recall=1.0`, `span_exact_recall=1.0`, `component_span_success_count=50`, `fn_count=0`을 확인함
   - 입력 gold: `datasets/gold/gold_ps_ce002.xlsx`
   - 2-ID 체계: `e_id=teaching_item_id`, `ps_id=detect_unit_id=encoder_task_id`
   - `polysets` 시트의 `ps_id=ps_ce002`를 runtime/encoder task unit으로 사용함

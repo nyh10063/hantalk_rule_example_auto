@@ -314,7 +314,7 @@ class ComponentLocator:
         return candidates[:max_candidates]
 
     @staticmethod
-    def _candidate_score(candidate: ComponentCandidate, regex_match_span: list[int]) -> tuple[int, int, int]:
+    def _candidate_score(candidate: ComponentCandidate, regex_match_span: list[int]) -> tuple[int, int, int, int]:
         start, end = candidate.span
         match_start, match_end = regex_match_span
         if start < match_end and end > match_start:
@@ -323,8 +323,9 @@ class ComponentLocator:
             distance = match_start - end
         else:
             distance = start - match_end
+        length = end - start
         source_penalty = 0 if candidate.source == "surface" else 1
-        return (distance, source_penalty, start)
+        return (distance, -length, source_penalty, start)
 
     @classmethod
     def _component_orders(cls, components: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
@@ -496,15 +497,16 @@ class ComponentLocator:
         return True
 
     @staticmethod
-    def _path_score(path: list[ComponentCandidate], regex_match_span: list[int]) -> tuple[int, int, int, int]:
+    def _path_score(path: list[ComponentCandidate], regex_match_span: list[int]) -> tuple[int, int, int, int, int]:
         distances = [ComponentLocator._candidate_score(candidate, regex_match_span)[0] for candidate in path]
         total_gap = sum(
             max(0, current.span[0] - previous.span[1])
             for previous, current in zip(path, path[1:])
         )
+        total_length = sum(candidate.span[1] - candidate.span[0] for candidate in path)
         bridge_count = sum(1 for candidate in path if candidate.source == "bridge")
         start = path[0].span[0] if path else 0
-        return (sum(distances), total_gap, bridge_count, start)
+        return (sum(distances), total_gap, -total_length, bridge_count, start)
 
     @staticmethod
     def _merge_component_spans(raw_text: str, spans: list[list[int]]) -> list[list[int]]:

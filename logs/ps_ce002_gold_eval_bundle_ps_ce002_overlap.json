@@ -8,14 +8,14 @@
   ],
   "bundle_match_policy": "overlap",
   "span_source": "detector_candidate_spans",
-  "component_span_enabled": false,
-  "component_span_success_count": 0,
-  "component_span_success_rate": 0.0,
+  "component_span_enabled": true,
+  "component_span_success_count": 50,
+  "component_span_success_rate": 1.0,
   "component_span_fallback_count": 0,
   "component_span_fallback_rate": 0.0,
-  "component_span_regex_match_count": 50,
+  "component_span_regex_match_count": 0,
   "span_source_counts": {
-    "regex_match": 50
+    "component_spans": 50
   },
   "gold_total": 50,
   "gold_matched": 50,
@@ -28,5 +28,5 @@
   "span_exact_count": 50,
   "span_exact_recall": 1.0,
   "hard_failed_candidate_count": 0,
-  "created_at": "2026-05-03T12:25:29.581012+00:00"
+  "created_at": "2026-05-03T13:13:09.504055+00:00"
 }
