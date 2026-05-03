@@ -195,6 +195,13 @@
     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_examples.xlsx`
     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_pair_examples.jsonl`
     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_examples_summary.json`
+- 문법항목별 TP/FP 수집 정책을 코드와 문서에 반영함
+  - 기본 정책: `target_pos=100`, `target_neg=100`, `max_batches=5`
+  - `src/summarize_review.py`에 `--target-pos`, `--target-neg`, `--max-batches` 옵션을 추가함
+  - review summary에 `collection_policy`와 `collection_status`를 추가함
+  - `processed_batches`는 생성된 batch 수가 아니라, 실제 labeled review 입력으로 집계된 batch 수로 정의함
+  - `src/export_encoder_examples.py` summary에 `collection_policy`와 `class_balance.downsampling_applied=false`를 추가함
+  - encoder example export 단계에서는 downsampling을 적용하지 않고, 실제 학습 결과를 본 뒤 class balancing 여부를 판단하기로 함
 
 ## 이번에 테스트한 것
 
@@ -458,6 +465,9 @@
   - `FP=157`
   - `positive_100=true`
   - `negative_100=true`
+  - `collection_status.processed_batches=2`
+  - `collection_status.processed_batch_ids=["batch_000", "batch_002"]`
+  - `collection_status.stop_reason=target_reached`
   - `next_action=ready_for_encoder_export`
 - batch_000 + batch_002 labeled review에서 인코더 pair examples export 확인:
   - `n_rows_exported=287`
@@ -467,6 +477,9 @@
   - `pos_disconti=98`
   - `neg_target_absent=157`
   - `train=229`, `dev=29`, `test=29`
+  - `class_balance.downsampling_applied=false`
+  - `class_balance.positive_ratio=0.4529616724738676`
+  - `class_balance.negative_ratio=0.5470383275261324`
 - 모델 다운로드 없이 `/private/tmp`에서 최신 `df003_encoder_pair_examples.jsonl` validate-only를 실행함:
   - command: `python3 -m src.train_encoder_pair --examples-jsonl /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_pair_examples.jsonl --out-dir /private/tmp/hantalk_df003_encoder_pair_validate_287 --model-name-or-path klue/roberta-base --seed 42 --shuffle-seed 42 --validate-only --skip-tokenization-stats --overwrite`
   - output files:
@@ -474,6 +487,8 @@
     - `/private/tmp/hantalk_df003_encoder_pair_validate_287/data_summary.json`
     - `/private/tmp/hantalk_df003_encoder_pair_validate_287/train_encoder_pair_report.json`
   - validation result: `n_examples=287`
+- `PYTHONPYCACHEPREFIX=/private/tmp/hantalk_pycache python3 -m py_compile src/summarize_review.py src/export_encoder_examples.py` 통과
+- `git diff --check -- src/summarize_review.py src/export_encoder_examples.py PROJECT_SPEC.md DECISIONS.md CURRENT_TASK.md` 통과
 ## 다음 작업
 
 1. df003 예문 수집은 현재 기준으로 멈추고, `df003_encoder_pair_examples.jsonl`을 학습 입력 SSOT로 사용함

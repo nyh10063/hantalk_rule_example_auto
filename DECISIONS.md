@@ -246,3 +246,11 @@ Reason: Codex가 먼저 후보를 검토하더라도 최종 학습 데이터의 
 ### Decision: encoder 학습 report에는 truncation과 end-to-end speed 측정을 반드시 기록한다.
 
 Reason: HanTalk의 목표는 응답속도가 빠른 범위에서 성능을 올리는 것이다. pair input에서 `[SPAN]...[/SPAN]` marker나 핵심 span이 max length 때문에 잘리면 모델 성능이 흔들릴 수 있으므로 split별 truncation 통계를 저장한다. 또한 모델 비교의 기준이 성능뿐 아니라 응답속도이므로 `avg_inference_example_sec`를 기록하되, 초기 측정은 tokenization, collator, DataLoader overhead를 포함한 end-to-end eval latency임을 report에 명시한다.
+
+### Decision: 문법항목별 TP/FP 수집은 `target_pos=100`, `target_neg=100`, `max_batches=5`를 기본 정책으로 한다.
+
+Reason: `다면`처럼 FP가 거의 없는 문법항목에서 무한히 batch를 추가하면 작업량이 커지고, 오히려 해당 항목에 오탐 필터 인코더가 필요한지 판단이 늦어진다. 따라서 기본 목표는 TP 100개와 FP 100개로 두되, 최대 5개 labeled batch까지만 수집한다. 5 batch 후에도 한쪽이 부족하면 무한 검색하지 않고 현재 확보량으로 encoder 필요성, 추가 말뭉치 전략, 또는 학습 방식 조정을 재판단한다.
+
+### Decision: encoder example export 단계에서는 TP/FP downsampling을 적용하지 않는다.
+
+Reason: 사람이 확정한 TP/FP pool은 나중에 학습 전략을 바꿀 때 다시 사용할 수 있는 원본 자료이다. export 단계에서 미리 downsampling하면 복구가 어렵고, 실제 모델 학습에서 불균형이 문제인지도 확인하기 어렵다. 따라서 `*_encoder_pair_examples.jsonl`에는 valid TP/FP를 모두 보존하고, class balancing은 실제 학습 결과를 본 뒤 `loss_pos_weight`, sampler, train subset sampling 등으로 별도 판단한다.

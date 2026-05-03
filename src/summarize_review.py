@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
@@ -20,6 +21,7 @@ except ImportError:  # pragma: no cover - handled at runtime for xlsx input.
 LABEL_KEYS = ("tp", "fp", "unclear", "blank", "invalid")
 SPAN_STATUS_KEYS = ("ok", "span_wrong", "not_applicable", "blank", "invalid")
 REQUIRED_COLUMNS = {"hit_id", "human_label", "span_status"}
+BATCH_ID_RE = re.compile(r"batch[_-](\d{3,})", re.IGNORECASE)
 
 LABEL_ALIASES = {
     "tp": "tp",
@@ -122,6 +124,22 @@ def _item_reference(row: dict[str, str]) -> tuple[str | None, str | None, str | 
     return None, None, None
 
 
+def _extract_batch_id(row: dict[str, str], input_path: Path) -> str:
+    """Return a normalized batch id from row metadata or filename."""
+    candidates = [
+        str(row.get("batch_id") or "").strip(),
+        str(row.get("hit_id") or "").strip(),
+        input_path.name,
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        match = BATCH_ID_RE.search(candidate)
+        if match:
+            return f"batch_{match.group(1)}"
+    return "unknown"
+
+
 def _read_csv(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
@@ -202,11 +220,20 @@ def summarize_reviews(
     item_id: str,
     input_paths: list[Path],
     out_path: Path,
+    target_pos: int,
+    target_neg: int,
+    max_batches: int,
 ) -> dict[str, Any]:
     if not item_id.strip():
         raise ValueError("--item-id must not be blank")
     if not input_paths:
         raise ValueError("At least one --input is required")
+    if target_pos < 0:
+        raise ValueError("--target-pos must be >= 0")
+    if target_neg < 0:
+        raise ValueError("--target-neg must be >= 0")
+    if max_batches <= 0:
+        raise ValueError("--max-batches must be > 0")
     expected_item_id = item_id.strip()
 
     label_counts: Counter[str] = Counter()
@@ -224,6 +251,7 @@ def summarize_reviews(
     missing_item_reference_rows: list[dict[str, Any]] = []
     n_rows = 0
     n_tp_blank_span_status = 0
+    processed_batch_ids: set[str] = set()
 
     for input_path in input_paths:
         rows = _read_review_file(input_path)
@@ -243,6 +271,7 @@ def summarize_reviews(
                 )
                 continue
             seen_hit_ids[hit_id] = str(input_path)
+            processed_batch_ids.add(_extract_batch_id(row, input_path))
 
             item_ref_column, item_ref_value, unit_id_value = _item_reference(row)
             if item_ref_value is None:
@@ -315,9 +344,19 @@ def summarize_reviews(
 
     normalized_label_counts = _counter_to_counts(label_counts, LABEL_KEYS)
     normalized_span_status_counts = _counter_to_counts(span_status_counts, SPAN_STATUS_KEYS)
+    positive_count = normalized_label_counts["tp"]
+    negative_count = normalized_label_counts["fp"]
+    positive_target_reached = positive_count >= target_pos
+    negative_target_reached = negative_count >= target_neg
+    all_targets_reached = positive_target_reached and negative_target_reached
+    sorted_batch_ids = sorted(processed_batch_ids)
+    processed_batches = len(processed_batch_ids)
+    max_batches_reached = processed_batches >= max_batches
     target_reached = {
-        "positive_100": normalized_label_counts["tp"] >= 100,
-        "negative_100": normalized_label_counts["fp"] >= 100,
+        "positive_100": positive_target_reached,
+        "negative_100": negative_target_reached,
+        "positive_target": positive_target_reached,
+        "negative_target": negative_target_reached,
     }
 
     if normalized_label_counts["blank"] or normalized_label_counts["invalid"]:
@@ -328,11 +367,35 @@ def summarize_reviews(
         cleanup_flags.append("tp_span_status_blank")
 
     if cleanup_flags:
+        stop_reason = "needs_label_cleanup"
         next_action = "needs_label_cleanup"
-    elif target_reached["positive_100"] and target_reached["negative_100"]:
+    elif all_targets_reached:
+        stop_reason = "target_reached"
         next_action = "ready_for_encoder_export"
+    elif max_batches_reached:
+        stop_reason = "max_batches_reached"
+        next_action = "max_batches_reached"
     else:
+        stop_reason = "continue_batch_search"
         next_action = "continue_batch_search"
+
+    collection_policy = {
+        "target_pos": target_pos,
+        "target_neg": target_neg,
+        "max_batches": max_batches,
+    }
+    collection_status = {
+        "processed_batches": processed_batches,
+        "processed_batch_ids": sorted_batch_ids,
+        "positive_count": positive_count,
+        "negative_count": negative_count,
+        "positive_target_reached": positive_target_reached,
+        "negative_target_reached": negative_target_reached,
+        "all_targets_reached": all_targets_reached,
+        "max_batches_reached": max_batches_reached,
+        "stop_reason": stop_reason,
+        "next_action": next_action,
+    }
 
     summary = {
         "schema_version": "hantalk_review_summary_v1",
@@ -355,6 +418,8 @@ def summarize_reviews(
         "by_domain": _group_counts_to_dict(by_domain),
         "by_span_source": _group_counts_to_dict(by_span_source),
         "by_component_span_status": _group_counts_to_dict(by_component_span_status),
+        "collection_policy": collection_policy,
+        "collection_status": collection_status,
         "target_reached": target_reached,
         "next_action": next_action,
         "cleanup_flags": cleanup_flags,
@@ -384,6 +449,9 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         "--artifact-root",
         help="Base artifact folder, e.g. /.../HanTalk_arti/example_making. Used to derive {artifact_root}/{item_id}/{item_id}_review_summary.json when --out is omitted.",
     )
+    parser.add_argument("--target-pos", type=int, default=100)
+    parser.add_argument("--target-neg", type=int, default=100)
+    parser.add_argument("--max-batches", type=int, default=5)
     return parser
 
 
@@ -400,6 +468,9 @@ def main(argv: list[str] | None = None) -> int:
             item_id=args.item_id,
             input_paths=[Path(path) for path in args.inputs],
             out_path=out_path,
+            target_pos=args.target_pos,
+            target_neg=args.target_neg,
+            max_batches=args.max_batches,
         )
     except Exception as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
@@ -412,6 +483,7 @@ def main(argv: list[str] | None = None) -> int:
                 "n_rows": summary["n_rows"],
                 "label_counts": summary["label_counts"],
                 "target_reached": summary["target_reached"],
+                "collection_status": summary["collection_status"],
                 "next_action": summary["next_action"],
                 "out": str(out_path),
             },

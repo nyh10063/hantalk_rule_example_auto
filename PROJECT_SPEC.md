@@ -212,6 +212,18 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 5. 확정된 검색용 정규식으로 다음 prepared corpus batch를 추가 검색합니다.
 6. 사람이 TP/FP/span을 검수하여 positive/negative 예문을 각각 100개 모을 때까지 반복합니다.
 
+문법항목별 기본 수집 정책:
+
+- `target_pos=100`
+- `target_neg=100`
+- `max_batches=5`
+
+수집 중단 기준:
+
+- TP와 FP가 모두 목표 개수 이상이면 수집을 중단하고 encoder example export로 이동합니다.
+- 최대 5개 labeled batch를 처리했는데도 한쪽이 부족하면 무한히 batch를 추가하지 않고, 현재 확보량으로 encoder 필요성 또는 추가 전략을 재판단합니다.
+- `processed_batches`는 생성된 batch 수가 아니라, 실제 labeled review 입력으로 집계에 들어간 batch 수입니다. 예를 들어 batch_001 labeled 파일이 없고 batch_000과 batch_002만 사용하면 `processed_batches=2`입니다.
+
 원칙:
 
 - 정규식을 수정할 때마다 반드시 gold recall test를 다시 실행합니다.
@@ -220,6 +232,7 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 - DetectorEngine은 가능한 경우 `component_spans`를 저장하고, component 조립 실패 시 `regex_match_fallback`으로 후보를 유지합니다.
 - Kiwi 등 형태소 분석 기반 보정은 아직 도입하지 않았으며, 필요한 경우 후속 단계에서 비교합니다.
 - 현재 단계에서는 인코더 fine-tuning을 수행하지 않고, positive/negative 예문 구축까지만 목표로 합니다.
+- encoder example export 단계에서는 TP/FP downsampling을 적용하지 않습니다. 사람이 확정한 TP/FP pool은 있는 그대로 보존하고, class balancing은 실제 학습 결과를 본 뒤 loss weight, sampler, train subset 등의 방식으로 별도 판단합니다.
 
 ## 형태소 분석 및 브릿지 cache 설계 메모
 

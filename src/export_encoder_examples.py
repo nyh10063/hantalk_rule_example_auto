@@ -596,12 +596,19 @@ def export_encoder_examples(
     out_summary: Path,
     min_pos: int,
     min_neg: int,
+    max_batches: int,
     seed: int,
 ) -> dict[str, Any]:
     if not item_id.strip():
         raise ValueError("--item-id must not be blank")
     if not input_paths:
         raise ValueError("At least one --input is required")
+    if min_pos < 0:
+        raise ValueError("--min-pos/--target-pos must be >= 0")
+    if min_neg < 0:
+        raise ValueError("--min-neg/--target-neg must be >= 0")
+    if max_batches <= 0:
+        raise ValueError("--max-batches must be > 0")
 
     expected_item_id = item_id.strip()
     item_meta = _load_item_metadata(bundle_path, expected_item_id)
@@ -642,10 +649,15 @@ def export_encoder_examples(
     label_counts = Counter("positive" if record["label"] == 1 else "negative" for record in deduped_records)
     role_counts = Counter(str(record["example_role"]) for record in deduped_records)
     split_counts = Counter(str(record["split"]) for record in deduped_records)
+    positive_count = int(label_counts.get("positive", 0))
+    negative_count = int(label_counts.get("negative", 0))
+    total_labeled = positive_count + negative_count
+    positive_target_reached = positive_count >= min_pos
+    negative_target_reached = negative_count >= min_neg
     warnings = list(split_warnings)
-    if label_counts.get("positive", 0) < min_pos:
+    if positive_count < min_pos:
         warnings.append(f"positive count below min_pos={min_pos}")
-    if label_counts.get("negative", 0) < min_neg:
+    if negative_count < min_neg:
         warnings.append(f"negative count below min_neg={min_neg}")
 
     _write_jsonl(out_jsonl, deduped_records)
@@ -673,12 +685,27 @@ def export_encoder_examples(
         "split_counts": {key: int(split_counts.get(key, 0)) for key in SPLIT_KEYS},
         "split_counts_by_role": _split_counts_by_role(deduped_records),
         "counts_by_domain": _counter_by(deduped_records, "corpus_domain"),
-        "target_reached": {
-            "positive_100": int(label_counts.get("positive", 0)) >= min_pos,
-            "negative_100": int(label_counts.get("negative", 0)) >= min_neg,
+        "collection_policy": {
+            "target_pos": min_pos,
+            "target_neg": min_neg,
+            "max_batches": max_batches,
         },
-        "ready_for_training": int(label_counts.get("positive", 0)) >= min_pos
-        and int(label_counts.get("negative", 0)) >= min_neg,
+        "target_reached": {
+            "positive_100": positive_target_reached,
+            "negative_100": negative_target_reached,
+            "positive_target": positive_target_reached,
+            "negative_target": negative_target_reached,
+        },
+        "class_balance": {
+            "positive_count": positive_count,
+            "negative_count": negative_count,
+            "total": total_labeled,
+            "positive_ratio": (positive_count / total_labeled) if total_labeled else 0.0,
+            "negative_ratio": (negative_count / total_labeled) if total_labeled else 0.0,
+            "downsampling_applied": False,
+            "note": "No downsampling is applied at export time. Class balancing will be decided after observing actual training results.",
+        },
+        "ready_for_training": positive_target_reached and negative_target_reached,
         "span_format": "json_list",
         "input_construction_version": INPUT_CONSTRUCTION_VERSION,
         "span_marker_style": SPAN_MARKER_STYLE,
@@ -716,6 +743,9 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--min-pos", type=int, default=100)
     parser.add_argument("--min-neg", type=int, default=100)
+    parser.add_argument("--target-pos", type=int, help="Alias for --min-pos. Takes precedence when provided.")
+    parser.add_argument("--target-neg", type=int, help="Alias for --min-neg. Takes precedence when provided.")
+    parser.add_argument("--max-batches", type=int, default=5)
     parser.add_argument("--seed", type=int, default=20260502)
     return parser
 
@@ -723,6 +753,8 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
+    min_pos = args.target_pos if args.target_pos is not None else args.min_pos
+    min_neg = args.target_neg if args.target_neg is not None else args.min_neg
     try:
         out_xlsx, out_jsonl, out_summary = _resolve_output_paths(
             item_id=args.item_id.strip(),
@@ -738,8 +770,9 @@ def main(argv: list[str] | None = None) -> int:
             out_xlsx=out_xlsx,
             out_jsonl=out_jsonl,
             out_summary=out_summary,
-            min_pos=args.min_pos,
-            min_neg=args.min_neg,
+            min_pos=min_pos,
+            min_neg=min_neg,
+            max_batches=args.max_batches,
             seed=args.seed,
         )
     except Exception as exc:
