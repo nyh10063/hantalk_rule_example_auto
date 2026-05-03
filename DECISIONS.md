@@ -239,6 +239,10 @@ Reason: 이전 A그룹 프로젝트에서 성공한 구조는 span-marked senten
 
 Reason: 이전 A그룹 프로젝트와 추론 설명에서 binary classifier layer를 head로 불렀고, inference에서도 head logits를 기준으로 오탐 여부를 판단했다. 따라서 내부 구현 클래스명이 classifier와 유사하더라도 artifact 파일명은 `head.pt`로 저장한다. 이렇게 하면 기존 성공 구조와 HanTalk runtime 로딩 규칙이 일관된다.
 
+### Decision: Codex 1차 검토 파일은 자동 TP/FP 판정을 만들지 않는다.
+
+Reason: Codex가 먼저 후보를 검토하더라도 최종 학습 데이터의 라벨은 사람이 확정해야 한다. 자동 heuristic이나 auto label suggestion이 검수자 판단을 오염시키면 인코더 학습 데이터 품질이 흔들릴 수 있다. 따라서 `src/prepare_codex_review.py`는 `codex_review_label`, `codex_review_span_status`, `codex_review_reason`, `codex_review_note`, `codex_checked` 같은 빈 검토 열과 기계적 span parse report만 만들고, 의미 기반 TP/FP suggestion은 생성하지 않는다. `hit_id`는 이후 Codex review, human labeled file, summary, encoder export를 연결하는 key이므로 필수로 둔다.
+
 ### Decision: encoder 학습 report에는 truncation과 end-to-end speed 측정을 반드시 기록한다.
 
 Reason: HanTalk의 목표는 응답속도가 빠른 범위에서 성능을 올리는 것이다. pair input에서 `[SPAN]...[/SPAN]` marker나 핵심 span이 max length 때문에 잘리면 모델 성능이 흔들릴 수 있으므로 split별 truncation 통계를 저장한다. 또한 모델 비교의 기준이 성능뿐 아니라 응답속도이므로 `avg_inference_example_sec`를 기록하되, 초기 측정은 tokenization, collator, DataLoader overhead를 포함한 end-to-end eval latency임을 report에 명시한다.

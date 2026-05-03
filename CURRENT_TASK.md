@@ -5,7 +5,7 @@
 - Current phase: Phase 1 pilot
 - Current item: df003 `ㄴ/은 적 있/없`
 - Current project goal: 300개 문법항목의 검색용 정규식 및 오탐 필터링 인코더용 positive/negative 예문 구축 자동화
-- Current immediate goal: df003 batch_002 human review 파일을 사람이 TP/FP/span 검수하고, labeled 파일로 저장한 뒤 누적 positive/negative 개수를 확인하기
+- Current immediate goal: df003 batch_000 + batch_002 labeled review로 인코더 학습용 TP/FP 예문 export를 완료했으므로, 다음은 encoder pair JSONL validate-only 확인 뒤 실제 encoder backbone 학습 비교로 넘어가기
 
 ## 현재까지 완료
 
@@ -167,6 +167,34 @@
   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_002_search_report.json`
   - 후보 수: 142개
   - 후보 출처: 일상대화 57개, 뉴스 46개, 비출판물 29개, 학습자 말뭉치 10개
+- `src/prepare_codex_review.py` 구현 완료
+  - `*_human_review.csv/xlsx`를 읽어 Codex 1차 검토용 `*_codex_review.csv`, `*_codex_review.xlsx`, `*_codex_review_report.json`을 생성함
+  - 자동 TP/FP suggestion은 만들지 않고, Codex가 직접 채울 `codex_review_*` 열만 추가함
+  - `hit_id`, `raw_text`, `span_segments`를 필수 열로 검증함
+  - span parse, span boundary, overlap/ordering, `span_extracted_text`를 기계적으로 확인함
+- df003 batch_002 Codex 1차 검토용 파일 생성 완료:
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_002_codex_review.csv`
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_002_codex_review.xlsx`
+  - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_002_codex_review_report.json`
+  - span parse 결과: `parsed=142`, `parse_error=0`, `out_of_bounds=0`, `overlap_or_unsorted=0`
+- df003 batch_000 + batch_002 labeled review 누적 집계를 완료함
+  - 사용 파일:
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_000_human_review_labeled.csv`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_002_human_review_labeled.csv`
+  - batch_001 labeled 파일은 없으므로 이번 누적 집계와 export에서 제외함
+  - 누적 결과: `TP=130`, `FP=157`, `unclear=0`, `blank=0`, `invalid=0`
+  - `positive_100=true`, `negative_100=true`
+  - summary:
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_review_summary.json`
+- df003 인코더 학습용 예문 export를 batch_000 + batch_002 labeled review 기준으로 갱신함
+  - export 결과: `n_rows_read=287`, `n_rows_exported=287`, `n_rows_skipped=0`, `deduped_count=0`
+  - label counts: `positive=130`, `negative=157`
+  - role counts: `pos_conti=32`, `pos_disconti=98`, `neg_target_absent=157`
+  - split counts: `train=229`, `dev=29`, `test=29`
+  - 생성 파일:
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_examples.xlsx`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_pair_examples.jsonl`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_examples_summary.json`
 
 ## 이번에 테스트한 것
 
@@ -378,6 +406,14 @@
 - `src.train_encoder_pair` validate-only 경로에서 새 옵션(`--max-saved-prediction-rows`, `--log-every-steps`)과 최종 `train_config.json` 저장을 확인함
 - 잘못된 CLI 값 검증 확인:
   - `--threshold 2` 실행 시 `[ERROR] --threshold must be between 0 and 1`로 실패함
+- `python3 -m py_compile src/prepare_codex_review.py` 통과
+- `src.prepare_codex_review`를 df003 batch_002 human review CSV에 실행해 Codex 검토용 CSV/XLSX/report를 생성함
+- 생성된 Codex review XLSX를 다시 입력으로 읽는 경로도 `/private/tmp`에서 smoke test하여 `n_rows=142`, `span_parse_counts.parsed=142`를 확인함
+- df003 batch_002 Codex review report 확인:
+  - n_rows: 142
+  - span_parse_counts: `parsed=142`, `parse_error=0`, `out_of_bounds=0`, `overlap_or_unsorted=0`
+  - span_source_counts: `component_spans=74`, `regex_match_fallback=68`
+  - component_span_status_counts: `ok=74`, `no_ordered_component_path=67`, `partial_required_components=1`
 - 모델 다운로드 없이 `/private/tmp`에서 validate-only 실행을 확인함:
   - command: `python3 -m src.train_encoder_pair --examples-jsonl /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_pair_examples.jsonl --out-dir /private/tmp/hantalk_train_encoder_pair_validate --model-name-or-path local-placeholder-model --seed 42 --shuffle-seed 42 --validate-only --skip-tokenization-stats --overwrite`
   - output files:
@@ -416,22 +452,47 @@
   - 공통 prepared corpus: `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/`
   - item별 산출물 root: `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/{item_id}/`
   - 예: `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_002_human_review.csv`
+- batch_000 + batch_002 labeled review 누적 summary 확인:
+  - `n_rows=287`
+  - `TP=130`
+  - `FP=157`
+  - `positive_100=true`
+  - `negative_100=true`
+  - `next_action=ready_for_encoder_export`
+- batch_000 + batch_002 labeled review에서 인코더 pair examples export 확인:
+  - `n_rows_exported=287`
+  - `positive=130`
+  - `negative=157`
+  - `pos_conti=32`
+  - `pos_disconti=98`
+  - `neg_target_absent=157`
+  - `train=229`, `dev=29`, `test=29`
+- 모델 다운로드 없이 `/private/tmp`에서 최신 `df003_encoder_pair_examples.jsonl` validate-only를 실행함:
+  - command: `python3 -m src.train_encoder_pair --examples-jsonl /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_pair_examples.jsonl --out-dir /private/tmp/hantalk_df003_encoder_pair_validate_287 --model-name-or-path klue/roberta-base --seed 42 --shuffle-seed 42 --validate-only --skip-tokenization-stats --overwrite`
+  - output files:
+    - `/private/tmp/hantalk_df003_encoder_pair_validate_287/train_config.json`
+    - `/private/tmp/hantalk_df003_encoder_pair_validate_287/data_summary.json`
+    - `/private/tmp/hantalk_df003_encoder_pair_validate_287/train_encoder_pair_report.json`
+  - validation result: `n_examples=287`
 ## 다음 작업
 
-1. 사람이 batch_002 검수 후 아래 이름으로 labeled 파일을 저장함
-   - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_002_human_review_labeled.xlsx`
-   - 필요 시 CSV 사본:
-     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_002_human_review_labeled.csv`
-2. batch_000 labeled + batch_002 labeled을 `summarize_review.py`로 함께 집계함
-   - batch_001 labeled 파일이 이미 있거나 나중에 확정되면 함께 추가해 누적 집계함
-   - `positive_100=true`, `negative_100=true`이면 df003 예문 수집을 멈추고 encoder pair examples를 갱신함
-   - 부족하면 batch_003부터 같은 루프를 반복함
-3. 충분한 labeled 파일이 준비되면 `src.export_encoder_examples`를 누적 입력으로 다시 실행해 `df003_encoder_pair_examples.jsonl`을 갱신함
-4. positive/negative가 각각 100개 이상 모이면 `src/train_encoder_pair.py`로 validate-only를 다시 실행하고, 이후 선택한 encoder backbone으로 정식 학습을 실행함
+1. df003 예문 수집은 현재 기준으로 멈추고, `df003_encoder_pair_examples.jsonl`을 학습 입력 SSOT로 사용함
+2. 실제 encoder 학습 전에 모델 후보와 실행 환경을 정함
+   - 후보 예: `klue/roberta-base`, `klue/bert-base`, 경량 Korean encoder 후보, DeBERTa 계열 등
+   - 목표: F1=1에 도달 가능한 모델 중 end-to-end inference latency가 가장 낮은 모델 찾기
+3. 선택한 backbone으로 `src.train_encoder_pair` 정식 학습을 실행함
+4. 학습 report에서 아래를 비교함
+   - dev/test F1, balanced accuracy
+   - truncation stats
+   - `avg_inference_example_sec`
+   - parameter count
+   - debug predictions
+5. 학습 결과가 불안정하면 batch_003부터 추가 labeled review를 수집해 예문 수를 늘림
 
 ## 주의사항
 
-- 현재는 인코더 fine-tuning을 하지 않습니다.
+- df003은 batch_000 + batch_002만으로 positive/negative 100개 기준을 충족했으므로, 다음 명시 요청이 있으면 인코더 fine-tuning을 시작할 수 있습니다.
+- 다만 모델 후보와 실행 환경을 정하기 전까지는 추가 corpus batch를 만들거나 labeled 파일을 덮어쓰지 않습니다.
 - 현재 구현한 것은 인코더 학습 실행이 아니라 pair-mode 학습 예문 export입니다.
 - `src/train_encoder_pair.py`는 구현되어 있지만, 현재 batch_000 기준 positive=60/negative=85이므로 정식 학습은 아직 권장하지 않습니다. smoke나 validate-only는 가능하지만 논문/실험용 학습은 positive/negative 각각 100개 이상을 확보한 뒤 실행합니다.
 - Phase 1에서는 Label Studio, Prefect, DVC, MLflow를 도입하지 않습니다.

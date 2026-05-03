@@ -287,6 +287,9 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 | `HanTalk_work/corpus/example_making/prepared/example_making_batch_###.jsonl` | 여러 말뭉치에서 stable hash sampling으로 만든 공통 검색 batch | 자동화 | `search_corpus.py` |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_detection.jsonl` | DetectorEngine 검색 결과 원본 | 자동화 | 사람 + 검수/분석 CLI |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_human_review.csv` | 사람 검수용 후보 표 | 자동화 | 사람 검수 |
+| `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_codex_review.csv` | Codex 1차 검토용 후보 표. 자동 TP/FP 판정은 포함하지 않음 | 자동화 | Codex 1차 검토 + 사람 최종 검수 |
+| `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_codex_review.xlsx` | Codex 1차 검토용 Excel 사본 | 자동화 | Codex 1차 검토 + 사람 최종 검수 |
+| `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_codex_review_report.json` | Codex 검토 파일 준비 상태와 span parse report | 자동화 | 사람 + Codex |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_human_review_labeled.xlsx` | 사람이 확정한 TP/FP/span 검수 완료본 | 사람 | `summarize_review.py`, dataset export CLI |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_human_review_labeled.csv` | 사람이 확정한 TP/FP/span 검수 완료본의 CSV 사본 | 사람 또는 자동 변환 | `summarize_review.py`, dataset export CLI |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_review_summary.json` | labeled review 파일 누적 집계와 목표 달성 여부 | 자동화 | 사람 + 다음 batch 판단 |
@@ -582,6 +585,28 @@ python3 -m src.search_corpus \
 - human review CSV는 Excel에서 한국어가 깨지지 않도록 `utf-8-sig`로 저장합니다.
 - review CSV는 `span_segments`, `span_key`, `span_text`, `span_source`, `component_span_status`, `applied_bridge_ids`, `detect_rule_ids`를 포함합니다.
 - search report는 domain별 candidate 수, span source count, component span status count, 실행 시간을 기록합니다.
+
+## Codex 1차 검토용 review 준비
+
+`src/prepare_codex_review.py`는 `search_corpus.py`가 만든 `*_human_review.csv/xlsx`를 읽어 Codex 1차 검토용 `*_codex_review.csv`, `*_codex_review.xlsx`, `*_codex_review_report.json`을 생성합니다.
+
+이 스크립트는 의미판정을 하지 않습니다.
+
+원칙:
+
+- 자동 TP/FP suggestion을 만들지 않습니다.
+- `codex_review_label`, `codex_review_span_status`, `codex_review_reason`, `codex_review_note`, `codex_checked`는 Codex가 직접 1차 검토 후 채우는 참고 열입니다.
+- `human_label`, `span_status`, `corrected_span_segments`, `corrected_span_text`는 사람이 최종 확정하는 열입니다.
+- `summarize_review.py`와 `export_encoder_examples.py`는 Codex 검토 열이 아니라 사람이 확정한 `human_label`과 `span_status`만 최종 기준으로 사용합니다.
+- `hit_id`, `raw_text`, `span_segments`는 필수 열입니다. `hit_id`가 비어 있거나 중복되면 이후 누적 집계와 encoder export 연결이 흔들리므로 오류로 처리합니다.
+
+`prepare_codex_review.py`가 수행하는 기계적 검사는 아래로 제한합니다.
+
+- `span_segments` parse 가능 여부 확인
+- `[start,end)` 범위와 `raw_text` boundary 확인
+- segment 오름차순과 overlap 여부 확인
+- `span_extracted_text`, `span_parse_status`, `span_parse_note` 생성
+- `span_source`, `component_span_status`, 기존 `human_label` blank count 등 준비 상태 report 생성
 
 ## Labeled review summary
 
