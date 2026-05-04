@@ -114,6 +114,51 @@ def _group_counts_to_dict(group_counts: dict[str, Counter[str]]) -> dict[str, di
     }
 
 
+def _build_rule_refinement_status(
+    *,
+    tp_count: int,
+    fp_count: int,
+    processed_batches: int,
+    max_processed_batches: int,
+    fp_tp_ratio_threshold: float,
+    has_cleanup_issue: bool,
+) -> dict[str, Any]:
+    ratio_available = tp_count > 0 or fp_count > 0
+    ratio_is_infinite = tp_count == 0 and fp_count > 0
+    if tp_count > 0:
+        fp_tp_ratio: float | None = fp_count / tp_count
+    else:
+        fp_tp_ratio = None
+
+    should_consider_rule_update = False
+    if has_cleanup_issue:
+        reason = "needs_label_cleanup"
+    elif processed_batches >= max_processed_batches:
+        reason = "processed_batches_limit_reached"
+    elif not ratio_available:
+        reason = "fp_tp_ratio_unavailable"
+    elif ratio_is_infinite:
+        should_consider_rule_update = True
+        reason = "fp_tp_ratio_infinite"
+    elif fp_tp_ratio is not None and fp_tp_ratio > fp_tp_ratio_threshold:
+        should_consider_rule_update = True
+        reason = "fp_tp_ratio_above_threshold"
+    else:
+        reason = "fp_tp_ratio_within_threshold"
+
+    return {
+        "tp_count": tp_count,
+        "fp_count": fp_count,
+        "fp_tp_ratio": fp_tp_ratio,
+        "fp_tp_ratio_available": ratio_available,
+        "fp_tp_ratio_is_infinite": ratio_is_infinite,
+        "processed_batches": processed_batches,
+        "should_consider_rule_update": should_consider_rule_update,
+        "reason": reason,
+        "note": "Rule updates require gold 50 recall=1 recheck before corpus search.",
+    }
+
+
 def _item_reference(row: dict[str, str]) -> tuple[str | None, str | None, str | None]:
     origin_e_id = str(row.get("origin_e_id") or "").strip()
     unit_id = str(row.get("unit_id") or "").strip()
@@ -223,6 +268,7 @@ def summarize_reviews(
     target_pos: int,
     target_neg: int,
     max_batches: int,
+    fp_tp_ratio_threshold: float,
 ) -> dict[str, Any]:
     if not item_id.strip():
         raise ValueError("--item-id must not be blank")
@@ -234,6 +280,8 @@ def summarize_reviews(
         raise ValueError("--target-neg must be >= 0")
     if max_batches <= 0:
         raise ValueError("--max-batches must be > 0")
+    if fp_tp_ratio_threshold <= 0:
+        raise ValueError("--fp-tp-ratio-threshold must be > 0")
     expected_item_id = item_id.strip()
 
     label_counts: Counter[str] = Counter()
@@ -382,7 +430,8 @@ def summarize_reviews(
     collection_policy = {
         "target_pos": target_pos,
         "target_neg": target_neg,
-        "max_batches": max_batches,
+        "max_processed_batches": max_batches,
+        "cli_flag": "--max-batches",
     }
     collection_status = {
         "processed_batches": processed_batches,
@@ -396,6 +445,19 @@ def summarize_reviews(
         "stop_reason": stop_reason,
         "next_action": next_action,
     }
+    rule_refinement_policy = {
+        "fp_tp_ratio_threshold": fp_tp_ratio_threshold,
+        "use_human_label_only": True,
+        "rule_update_basis": "gold_fn_or_human_confirmed_systematic_fp",
+    }
+    rule_refinement_status = _build_rule_refinement_status(
+        tp_count=positive_count,
+        fp_count=negative_count,
+        processed_batches=processed_batches,
+        max_processed_batches=max_batches,
+        fp_tp_ratio_threshold=fp_tp_ratio_threshold,
+        has_cleanup_issue=bool(cleanup_flags),
+    )
 
     summary = {
         "schema_version": "hantalk_review_summary_v1",
@@ -420,6 +482,8 @@ def summarize_reviews(
         "by_component_span_status": _group_counts_to_dict(by_component_span_status),
         "collection_policy": collection_policy,
         "collection_status": collection_status,
+        "rule_refinement_policy": rule_refinement_policy,
+        "rule_refinement_status": rule_refinement_status,
         "target_reached": target_reached,
         "next_action": next_action,
         "cleanup_flags": cleanup_flags,
@@ -451,7 +515,18 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--target-pos", type=int, default=100)
     parser.add_argument("--target-neg", type=int, default=100)
-    parser.add_argument("--max-batches", type=int, default=3)
+    parser.add_argument(
+        "--max-batches",
+        type=int,
+        default=3,
+        help="Maximum number of processed labeled review batches to summarize before stopping collection/refinement.",
+    )
+    parser.add_argument(
+        "--fp-tp-ratio-threshold",
+        type=float,
+        default=2.0,
+        help="If FP/TP is above this threshold before --max-batches is reached, flag the item for systematic FP rule-update review.",
+    )
     return parser
 
 
@@ -471,6 +546,7 @@ def main(argv: list[str] | None = None) -> int:
             target_pos=args.target_pos,
             target_neg=args.target_neg,
             max_batches=args.max_batches,
+            fp_tp_ratio_threshold=args.fp_tp_ratio_threshold,
         )
     except Exception as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
@@ -484,6 +560,7 @@ def main(argv: list[str] | None = None) -> int:
                 "label_counts": summary["label_counts"],
                 "target_reached": summary["target_reached"],
                 "collection_status": summary["collection_status"],
+                "rule_refinement_status": summary["rule_refinement_status"],
                 "next_action": summary["next_action"],
                 "out": str(out_path),
             },

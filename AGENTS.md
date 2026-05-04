@@ -1,3 +1,5 @@
+코딩은 Codex가 한다. Claude Code는 계획, 분석, 판단, 수정 제안 등을 수행한다. chatGPT는 사령탑 역할을 맡는다.
+
 # Agent Instructions
 
 이 문서는 HanTalk 문법항목 검색 규칙 및 예문 구축 자동화 프로젝트에서 Codex가 작업할 때 반드시 먼저 읽어야 하는 운영 규칙입니다.

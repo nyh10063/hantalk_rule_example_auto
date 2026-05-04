@@ -29,6 +29,8 @@
   - `FP/TP > 2`이고 `processed_batches < 3`이면 안전한 systematic FP 제거 규칙만 검토합니다.
   - `processed_batches >= 3`이면 batch 추가와 규칙 다듬기를 중단하고 현재 확보량으로 판단합니다.
   - `processed_batches`는 사람이 labeled review를 완료해 summary에 반영한 batch 수입니다.
+  - summary JSON에서는 이 상한을 `collection_policy.max_processed_batches`로 기록합니다. CLI는 호환성을 위해 `--max-batches`를 유지합니다.
+  - `summarize_review.py`는 `rule_refinement_status.should_consider_rule_update`와 `reason`으로 rule update 후보 검토 필요 여부를 기록합니다. 별도 `next_action`은 추가하지 않습니다.
 - 현재는 인코더 학습을 실행하지 않습니다. 여러 문법항목의 TP/FP export가 충분히 쌓인 뒤 전체 aggregate 기준으로 학습합니다.
 
 아래 “누적 완료 이력”과 이후 날짜별 기록은 historical log입니다. 오래된 결정이 현재 기준과 다를 수 있으며, 보존 가치가 있는 과거 시도는 복기용으로 남깁니다.
@@ -224,12 +226,19 @@
     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_pair_examples.jsonl`
     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_encoder_examples_summary.json`
 - 문법항목별 TP/FP 수집 정책을 코드와 문서에 반영함
-  - 기본 정책: `target_pos=100`, `target_neg=100`, `max_batches=3`
+  - 기본 정책: `target_pos=100`, `target_neg=100`, `max_processed_batches=3`
+  - 기존 CLI 호환을 위해 `summarize_review.py --max-batches`는 유지함
   - `src/summarize_review.py`에 `--target-pos`, `--target-neg`, `--max-batches` 옵션을 추가함
   - review summary에 `collection_policy`와 `collection_status`를 추가함
   - `processed_batches`는 생성된 batch 수가 아니라, 실제 labeled review 입력으로 집계된 batch 수로 정의함
   - `src/export_encoder_examples.py` summary에 `collection_policy`와 `class_balance.downsampling_applied=false`를 추가함
   - encoder example export 단계에서는 downsampling을 적용하지 않고, 실제 학습 결과를 본 뒤 class balancing 여부를 판단하기로 함
+- `src/summarize_review.py`에 rule refinement 판단 report를 추가함
+  - `--fp-tp-ratio-threshold` 기본값은 `2.0`
+  - `rule_refinement_policy`와 `rule_refinement_status`를 summary JSON에 기록함
+  - `rule_refinement_status`에는 `next_action`, `stop_reason`, `should_stop_rule_refinement`를 넣지 않고, `should_consider_rule_update`와 `reason`만 기록함
+  - `collection_policy.max_processed_batches`를 기준 key로 사용하고, 현재 CLI flag인 `cli_flag=--max-batches`를 기록함
+  - `src/export_encoder_examples.py` summary도 `collection_policy.max_processed_batches` key를 사용하도록 맞춤
 - `src/merge_encoder_examples.py` 구현 완료
   - item별 `{item_id}_encoder_pair_examples.jsonl`을 SSOT로 보고, 전체 `all_encoder_*` 파일은 derived aggregate로 자동 재생성함
   - `--input` 명시 입력과 `--discover --artifact-root` 자동 탐색을 지원함
@@ -584,6 +593,11 @@
   - sheet: `examples`
   - rows: 287
   - headers: `item_id`, `example_id`, `label`, `split`, `example_role`, `pattern_type`, `raw_text`, `span_segments`, `span_key`, `span_text`, `text_a`, `text_b`, `corpus_domain`, `source`, `source_hit_id`, `detect_rule_ids`, `note`
+- rule refinement status 보강 후 df003 labeled review summary smoke test를 실행함
+  - command: `python3 -m src.summarize_review --item-id df003 --input ...df003_batch_000_human_review_labeled.csv --input ...df003_batch_002_human_review_labeled.csv --out /private/tmp/df003_review_summary_rule_refinement_check.json`
+  - 결과: `TP=130`, `FP=157`, `FP/TP=1.2076923076923076`, `processed_batches=2`
+  - `rule_refinement_status.should_consider_rule_update=false`
+  - `rule_refinement_status.reason=fp_tp_ratio_within_threshold`
 ## 다음 작업
 
 1. 장기 기억 4개 파일을 현재 ps_id/polyset 자동화 기준으로 정리합니다.

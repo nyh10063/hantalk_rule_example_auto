@@ -688,7 +688,8 @@ def export_encoder_examples(
         "collection_policy": {
             "target_pos": min_pos,
             "target_neg": min_neg,
-            "max_batches": max_batches,
+            "max_processed_batches": max_batches,
+            "cli_flag": "--max-batches",
         },
         "target_reached": {
             "positive_100": positive_target_reached,

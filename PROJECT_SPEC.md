@@ -1,3 +1,5 @@
+코딩은 Codex가 한다. Claude Code는 계획, 분석, 판단, 수정 제안 등을 수행한다. chatGPT는 사령탑 역할을 맡는다.
+
 # Project Spec
 
 ## 최종 주제
@@ -243,12 +245,18 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 
 - `target_pos=100`
 - `target_neg=100`
-- `max_batches=3`
+- `max_processed_batches=3`
+
+CLI 호환성:
+
+- `summarize_review.py`의 CLI 인자는 기존 명령과 Colab 실행 호환을 위해 `--max-batches`를 유지합니다.
+- 단, 이 값의 의미는 “검색한 batch 수”가 아니라 “사람 labeled review가 완료되어 summary에 반영된 processed batch 수”입니다.
+- summary JSON의 기준 key는 `collection_policy.max_processed_batches`입니다.
 
 수집 중단 기준:
 
 - TP와 FP가 모두 목표 개수 이상이면 수집을 중단하고 encoder example export로 이동합니다.
-- 최대 3개 labeled batch를 처리했는데도 한쪽이 부족하면 무한히 batch를 추가하지 않고, 현재 확보량으로 encoder 필요성 또는 추가 전략을 재판단합니다.
+- 최대 3개 processed labeled batch를 처리했는데도 한쪽이 부족하면 무한히 batch를 추가하지 않고, 현재 확보량으로 encoder 필요성 또는 추가 전략을 재판단합니다.
 - `processed_batches`는 생성된 batch 수가 아니라, 실제 labeled review 입력으로 집계에 들어간 batch 수입니다. 예를 들어 batch_001 labeled 파일이 없고 batch_000과 batch_002만 사용하면 `processed_batches=2`입니다.
 
 규칙 다듬기 중단/수정 기준:
@@ -258,6 +266,8 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 - systematic FP가 있더라도 정규식 또는 verify hard_fail로 안전하게 제거할 수 있고 gold recall=1을 유지할 가능성이 있을 때만 dict rule 수정을 시도합니다.
 - `processed_batches >= 3`이면 FP/TP와 관계없이 batch 추가와 규칙 다듬기를 중단하고 현재 확보량으로 다음 판단을 합니다.
 - `TP=0, FP>0`이면 `FP/TP=inf`로 보고 systematic FP 검토 대상입니다. `TP=0, FP=0`이면 비율을 계산하지 않고 추가 검색 또는 gold/rule 재검토가 필요합니다.
+- `summarize_review.py`는 `rule_refinement_status.should_consider_rule_update`와 `reason`을 report에 남깁니다. 이 필드는 자동 수정 지시가 아니라 사람이 systematic FP 유형을 검토해야 하는지 알려주는 신호입니다.
+- `rule_refinement_status`에는 별도 `next_action`을 두지 않습니다. top-level `next_action`과 `collection_status.next_action`은 예문 수집/encoder export 흐름 판단용으로 유지합니다.
 
 원칙:
 
