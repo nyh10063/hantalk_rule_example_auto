@@ -275,7 +275,8 @@
 - `src/detector/engine.py`, `src/test_gold.py`, `src/search_corpus.py`에 공식 `allow_polyset` 경로를 추가함
   - 기존 `allow_experimental_polyset`은 호환용으로 유지함
 - `dict_ps_ce002.xlsx`에 `polysets.detect_ruleset_id=rs_ps_ce002_d01`과 `detect_rules.ps_id=ps_ce002` 기반 1차 detect rule을 추가함
-  - `r_ps_ce002_d01`: `(?:는데|은데|[가-힣]데)`
+  - initial `r_ps_ce002_d01`: `(?:는데|은데|[가-힣]데)`
+  - current `r_ps_ce002_d01`: `(?:는데|은데|[종성 ㄴ 음절 class]데)` 형태. `[가-힣]데`보다 좁게, Unicode Hangul 조합 규칙으로 생성한 종성 ㄴ 음절 399개만 허용함
   - `rule_components.bridge_id=nde`를 통해 component span 조립까지 연결함
 - ps_ce002 전용 개발 bundle 생성 완료
   - `configs/detector/detector_bundle_ps_ce002.json`
@@ -289,6 +290,13 @@
   - `span_source_counts={"component_spans": 50}`
   - `component_span_success_count=50`
   - `fn_count=0`
+- ps_ce002 detect rule을 `[가-힣]데`에서 `종성 ㄴ 음절 + 데` 중심으로 좁힌 뒤 bundle 재생성과 gold 50 평가를 다시 실행함
+  - bundle export: `warnings=0`
+  - gold 평가: `gold_recall=1.0`, `span_exact_recall=1.0`, `component_span_success_count=50`, `fn_count=0`
+- `src/hangul_regex.py`를 추가함
+  - 종성 ㄴ/ㄹ 같은 Hangul syllable character class를 기계적으로 생성하는 작은 유틸임
+  - 정규식 전체를 자동 작성하지 않고, 사람이/Codex가 설계한 detect regex 안의 기계적 부품만 생성하는 용도임
+  - `src/detector/bridges.py`의 종성 ㄴ 판별도 이 유틸을 재사용하도록 정리함
 
 ## 이번에 테스트한 것
 

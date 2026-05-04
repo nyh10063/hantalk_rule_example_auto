@@ -11,6 +11,11 @@ import re
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+try:  # Support both `python -m src...` and direct `python src/test_gold.py`.
+    from src.hangul_regex import has_jongseong
+except ModuleNotFoundError:  # pragma: no cover - exercised by script-style entrypoints.
+    from hangul_regex import has_jongseong
+
 
 @dataclass(frozen=True)
 class BridgeMetadata:
@@ -36,12 +41,7 @@ class BridgeMatcher(Protocol):
 
 def _has_final_n_syllable(ch: str) -> bool:
     """Return True if a Hangul syllable has jongseong ㄴ."""
-    if len(ch) != 1:
-        return False
-    code = ord(ch) - 0xAC00
-    if code < 0 or code >= 11172:
-        return False
-    return code % 28 == 4
+    return has_jongseong(ch, "ㄴ")
 
 
 def _component_options(component: dict[str, Any]) -> list[str]:

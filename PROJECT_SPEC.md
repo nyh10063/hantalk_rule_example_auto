@@ -566,6 +566,13 @@ Component bridge 원칙:
 - 브릿지는 candidate를 직접 만들지 않고 component 후보 span만 반환합니다.
 - `src/detector/component_locator.py`가 `rule_components`와 bridge 후보를 조합하여 최종 component span을 만듭니다.
 
+Regex helper 원칙:
+
+- `src/hangul_regex.py`는 종성 ㄴ/ㄹ처럼 Unicode Hangul 조합 규칙으로 기계적으로 정의되는 regex 부품만 생성합니다.
+- 이 유틸은 전체 detect regex를 자동 결정하지 않습니다.
+- 최종 detect regex 설계는 문법항목 의미, gold FN, corpus FP를 보고 사람/Codex가 검토합니다.
+- 유틸이 생성한 character class를 사용한 규칙도 반드시 gold 50 recall=1 검증을 통과해야 corpus search에 사용할 수 있습니다.
+
 Component order 정책:
 
 - `rule_components.comp_order`는 component span 조립의 기본 순서입니다.
