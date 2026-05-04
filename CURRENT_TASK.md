@@ -5,9 +5,37 @@
 - Current phase: Phase 1 pilot
 - Current item: ps_ce002 `ㄴ/은/는데` polyset task (`ce002`, `ce003`)
 - Current project goal: 300개 문법항목의 검색용 정규식 및 오탐 필터링 인코더용 positive/negative 예문 구축 자동화
-- Current immediate goal: ps_ce002 2-ID 체계(`e_id` teaching item, `ps_id` detect/encoder task unit)를 기존 자동화 경로에 순차 반영하고, `gold_ps_ce002.xlsx` 50개 기준 gold recall=1을 확보하기
+- Current immediate goal: 장기 기억 문서 4개를 현재 기준으로 정리한 뒤, ps_ce002 corpus search/review loop로 넘어가기
 
-## 현재까지 완료
+## 현재 기준 요약
+
+- df003 `ㄴ/은 적 있/없` pilot은 DetectorEngine, bridge/component span, corpus review, encoder example export 경로 검증을 완료했습니다.
+- ps_ce002 `ㄴ/은/는데`는 2-ID 체계를 적용합니다.
+  - `e_id`: teaching item ID (`ce002`, `ce003`)
+  - `ps_id`: detect_unit_id이자 encoder_task_id (`ps_ce002`)
+- 사용자는 새 unit 자동화 시작 시 `datasets/dict/dict_ps_??.xlsx`와 `datasets/gold/gold_ps_??.xlsx` skeleton Excel을 제공할 수 있습니다.
+- JSONL gold와 detector bundle은 Excel에서 자동 생성하는 산출물입니다. bundle을 직접 수정해 Excel로 되돌리지 않습니다.
+- ps_ce002 최신 검증 상태:
+  - `exported_gold/ps_ce002_gold_50.jsonl` 생성 완료
+  - `configs/detector/detector_bundle_ps_ce002.json` 생성 완료
+  - gold 50 기준 `gold_recall=1.0`, `span_exact_recall=1.0`, `fn_count=0`, `component_span_success_count=50`
+- 규칙 업데이트 정책:
+  - gold recall=1 전에는 corpus search로 넘어가지 않습니다.
+  - 규칙 수정은 gold FN 또는 사람이 확정한 systematic FP를 근거로만 수행합니다.
+  - Codex/LLM 임시 판단만으로 dict rule을 수정하지 않습니다.
+  - 규칙 수정 후에는 반드시 bundle 재생성과 gold recall test를 다시 실행합니다.
+- corpus review 후 규칙 다듬기/수집 중단 정책:
+  - `FP/TP <= 2`이면 규칙 다듬기를 멈추고 결과를 제출합니다.
+  - `FP/TP > 2`이고 `processed_batches < 3`이면 안전한 systematic FP 제거 규칙만 검토합니다.
+  - `processed_batches >= 3`이면 batch 추가와 규칙 다듬기를 중단하고 현재 확보량으로 판단합니다.
+  - `processed_batches`는 사람이 labeled review를 완료해 summary에 반영한 batch 수입니다.
+- 현재는 인코더 학습을 실행하지 않습니다. 여러 문법항목의 TP/FP export가 충분히 쌓인 뒤 전체 aggregate 기준으로 학습합니다.
+
+아래 “누적 완료 이력”과 이후 날짜별 기록은 historical log입니다. 오래된 결정이 현재 기준과 다를 수 있으며, 보존 가치가 있는 과거 시도는 복기용으로 남깁니다.
+
+## 누적 완료 이력
+
+이 섹션은 시간순/역시간순 작업 로그가 섞인 누적 이력입니다. 최신 정책은 위 “현재 기준 요약”과 `PROJECT_SPEC.md`, `DECISIONS.md`를 우선합니다.
 
 - `plan0429.md`에 전체 계획 작성됨
 - 장기 작업 기준 문서 구조 결정됨
@@ -226,7 +254,7 @@
   - 입력 gold: `datasets/gold/gold_ps_ce002.xlsx`
   - 2-ID 체계: `e_id=teaching_item_id`, `ps_id=detect_unit_id=encoder_task_id`
   - `polysets` 시트의 `ps_id=ps_ce002`를 runtime/encoder task unit으로 사용함
-  - 이번 단계에서는 `ㄴ/은/는데` bridge와 component span 조립을 보류하고, detect regex 기반 gold recall 평가까지만 수행함
+  - `rule_components.bridge_id=nde`와 component span 조립이 연결되어 50개 모두 component span으로 평가됨
 - `src/export_gold.py` 구현 완료
   - `gold_ps_ce002.xlsx`를 `exported_gold/ps_ce002_gold_50.jsonl`로 변환함
   - `ps_id`, `member_e_ids`, `target_sentence`, `span_segments`를 검증함
@@ -239,7 +267,7 @@
   - 기존 `allow_experimental_polyset`은 호환용으로 유지함
 - `dict_ps_ce002.xlsx`에 `polysets.detect_ruleset_id=rs_ps_ce002_d01`과 `detect_rules.ps_id=ps_ce002` 기반 1차 detect rule을 추가함
   - `r_ps_ce002_d01`: `(?:는데|은데|[가-힣]데)`
-  - note: bridge/component span은 다음 단계에서 별도 검토
+  - `rule_components.bridge_id=nde`를 통해 component span 조립까지 연결함
 - ps_ce002 전용 개발 bundle 생성 완료
   - `configs/detector/detector_bundle_ps_ce002.json`
 - ps_ce002 gold 50개 bundle 평가 완료
@@ -249,7 +277,8 @@
   - `sentence_recall=1.0`
   - `span_overlap_recall=1.0`
   - `span_exact_recall=1.0`
-  - `span_source_counts={"regex_match": 50}`
+  - `span_source_counts={"component_spans": 50}`
+  - `component_span_success_count=50`
   - `fn_count=0`
 
 ## 이번에 테스트한 것
@@ -269,7 +298,7 @@
 - df003 bundle 평가(overlap): `gold_total=50`, `gold_matched=50`, `gold_recall=1.0`, `span_overlap_recall=1.0`, `span_exact_recall=1.0`, `component_span_success_count=50`, `fn_count=0`
 - 직접 detect 확인: `"저는 제주도에 가 본 적이 있어요."`에서 DetectorEngine은 `span_segments=[[10, 13], [15, 16]]`, `span_text="본 적 ... 있"`, `span_source="component_spans"`, `applied_bridge_ids=["adnominal_n"]`을 출력함
 - `active_unit_ids` 없이 DetectorEngine을 실행하면 `ValueError: active_unit_ids is required unless allow_all=True`가 발생함을 확인함
-- `ps_neunde` polyset unit을 기본 옵션으로 실행하면 `ValueError`가 발생함을 확인함
+- historical: 당시 구명칭/실험용 `ps_neunde` polyset unit을 기본 옵션으로 실행하면 `ValueError`가 발생함을 확인함
 - 기준 문서에서 `configs/grammar_items.yaml`을 장기 SSOT처럼 보이게 하던 설명을 보조 config로 정리함
 - 기준 문서에서 `span_start/span_end` 중심 corpus hit schema를 `span_segments` 중심 detection JSONL/review CSV schema로 교체함
 - `order_policy=fx`는 고정 순서, `order_policy=fl`은 anchor 고정 + 인접 `fl`끼리만 교환하는 정책으로 기록함
@@ -557,40 +586,36 @@
   - headers: `item_id`, `example_id`, `label`, `split`, `example_role`, `pattern_type`, `raw_text`, `span_segments`, `span_key`, `span_text`, `text_a`, `text_b`, `corpus_domain`, `source`, `source_hit_id`, `detect_rule_ids`, `note`
 ## 다음 작업
 
-1. df003 예문 수집과 item별/전체 encoder example export는 현재 기준으로 완료됨
-2. 인코더 학습은 df003 하나만으로 바로 실행하지 않고, 여러 문법항목의 TP/FP export가 충분히 쌓인 뒤 전체 aggregate를 기준으로 실행함
-3. 다음 작업은 다음 문법항목을 선택해 df003과 같은 루프를 반복하는 것임
-   - gold 50
-   - detect rule/component/verify
-   - corpus search
-   - human review
-   - `summarize_review.py`
-   - `export_encoder_examples.py`
-   - `merge_encoder_examples.py`
+1. 장기 기억 4개 파일을 현재 ps_id/polyset 자동화 기준으로 정리합니다.
+2. ps_ce002는 gold 50 recall과 component span 검증이 완료되었으므로, 다음에는 prepared corpus batch에서 `ps_ce002` 검색 산출물을 만들고 Codex/human review loop로 넘어갑니다.
+3. ps_ce002 human-labeled review가 생기면 `summarize_review.py`로 `FP/TP`, `processed_batches`, target 달성 여부를 확인합니다.
+4. `FP/TP <= 2`이거나 `processed_batches >= 3`이면 규칙 다듬기를 멈추고 결과를 제출합니다.
+5. `FP/TP > 2`이고 `processed_batches < 3`이면 사람이 확정한 systematic FP에 대해서만 detect/verify rule 수정을 검토하고, 수정 후 gold recall=1을 다시 확인합니다.
+6. 인코더 학습은 df003 하나 또는 ps_ce002 하나로 바로 실행하지 않고, 여러 문법항목의 TP/FP export가 충분히 쌓인 뒤 전체 aggregate를 기준으로 실행합니다.
 
 ## 주의사항
 
 - df003은 batch_000 + batch_002만으로 positive/negative 100개 기준을 충족했지만, 인코더 fine-tuning은 모든 또는 충분한 문법항목의 TP/FP가 모인 뒤 실행합니다.
 - 다음 문법항목을 시작하기 전까지는 df003 labeled 파일과 encoder export 산출물을 덮어쓰지 않습니다.
 - 현재 구현한 것은 인코더 학습 실행이 아니라 pair-mode 학습 예문 export입니다.
-- `src/train_encoder_pair.py`는 구현되어 있지만, 현재 batch_000 기준 positive=60/negative=85이므로 정식 학습은 아직 권장하지 않습니다. smoke나 validate-only는 가능하지만 논문/실험용 학습은 positive/negative 각각 100개 이상을 확보한 뒤 실행합니다.
+- `src/train_encoder_pair.py`는 구현되어 있지만, 정식 학습은 여러 문법항목의 TP/FP export가 충분히 쌓인 뒤 실행합니다. smoke나 validate-only는 가능하지만 논문/실험용 학습은 아직 보류합니다.
 - Phase 1에서는 Label Studio, Prefect, DVC, MLflow를 도입하지 않습니다.
 - LLM이 만든 TP/FP 판단은 임시 참고용이며 gold label이 아닙니다.
 - 사람이 만든 gold와 human review 파일은 명시 요청 없이 덮어쓰지 않습니다.
 - 정규식 recall=1은 사람이 만든 gold 50개 기준입니다.
 - 말뭉치 FP를 줄이기 위해 정규식을 수정하더라도 gold recall=1이 깨지면 검색용 정규식으로 확정하지 않습니다.
-- 브릿지는 무조건 채택하지 않고, 넓은 정규식으로 gold recall=1을 확보한 뒤 후보 버전 또는 `bridge_id` 버전을 만들어 비교합니다.
-- 브릿지 후보는 gold recall=1 유지와 5,000행 말뭉치 FP 감소량을 확인한 뒤, FP 감소 효과가 있거나 span 경계가 좋아질 때만 채택합니다. df003의 `adnominal_n`은 현재 채택되어 있습니다.
+- 브릿지는 무조건 채택하지 않습니다. 다만 채택 시에는 문법항목별 정규식 복붙이 아니라 `rule_components.bridge_id`와 공용 bridge registry를 우선 사용합니다.
+- df003의 `adnominal_n`과 ps_ce002의 `nde`는 현재 공용 bridge 방식으로 연결되어 있습니다.
 - 일반 말뭉치 검색은 공통 prepared corpus batch를 사용합니다. batch_002부터 현재 batch 비율은 일상대화 5,000행, 뉴스 700행, 비출판물 2,000행, 학습자 말뭉치 2,500행입니다. batch_000/001은 이전 비율 산출물로 보존합니다.
 
 ## 미해결 문제
 
-- df003 span 기준은 기존 df003 gold span을 변환해 사용했지만, 최종 교육적 span 정책은 사람이 확인해야 합니다.
+- df003 span 기준은 기존 df003 gold span을 변환해 사용했으며 현재 gold 50 기준 span exact는 통과합니다. 다만 최종 교육적 span 정책은 여러 항목이 쌓인 뒤 사람이 다시 점검할 수 있습니다.
 - 공통 prepared corpus batch는 stable hash 기반으로 구현했고, batch_002부터 비율 변경에 따른 domain별 중복을 피하기 위해 `sampling_schedules`와 `rank_start_offsets`를 사용합니다. 이후 batch_index를 늘릴 때 domain별 중복 없음과 검수량 운영 방식은 계속 확인해야 합니다.
 - 기본 detector 경로는 Kiwi 없이 진행합니다. 다만 문자 기반 bridge로 해결하기 어려운 항목이 나오면 Kiwi 상업 라이선스/속도/정확도 및 다른 형태소 분석기 후보를 비교해야 합니다.
 - 예외적으로 형태소 분석을 쓰게 될 경우 문장 단위 형태소 분석 cache를 전체 300개 규칙에 공유할지, 난이도/목표 항목에 따라 필요한 규칙에만 공유할지는 HanTalk 본 시스템 설계 단계에서 다시 결정해야 합니다.
 - `PROJECT_SPEC.md`의 `향후 detector 설계 검토 메모`는 SSOT가 아니라 비-SSOT 검토 목록입니다. 구현 전 다시 검토해야 합니다.
-- df003은 component span 조립이 붙었지만, 일반 말뭉치에서는 `regex_match_fallback` 후보가 FP로 남을 수 있습니다. corpus search 단계에서 이 후보들을 확인해야 합니다.
+- df003과 ps_ce002 모두 component span 조립 경로가 붙었습니다. 일반 말뭉치에서는 `regex_match_fallback` 후보가 FP로 남을 수 있으므로 corpus review 단계에서 계속 확인합니다.
 - 현재 `detector_bundle.json`은 dict 정리 후 warnings=0으로 생성됩니다.
 - 현재 최신 `detector_bundle.json`은 warnings=0으로 export되며, df003 gold recall=1.0을 회복했습니다.
 
@@ -693,7 +718,7 @@
 - 변경점 3-(2): 응답 속도에 영향을 줄 수 있는 요소는 가급적 빠른 방식으로 실현하기로 기록함.
 - `DECISIONS.md`에 대화 주제 조건 기반 LLM 주도와 응답 속도 우선 구현 결정을 추가함.
 
-## 2026-05-01 gold.xlsx 원본 관리 원칙 기록
+## 2026-05-01 gold.xlsx 원본 관리 원칙 기록 (확장됨: 현재는 unit별 skeleton Excel도 허용)
 
 - `PROJECT_SPEC.md`에 `gold.xlsx` 설계 원칙을 추가함.
 - 정규식 gold 원본은 `datasets/gold/gold.xlsx`로 사람이 관리하기로 함.
@@ -701,7 +726,7 @@
 - item별 JSONL은 앱 응답속도 목적이 아니라 개발/검증 속도와 재현성을 위한 파일로 기록함.
 - `DECISIONS.md`에 `gold.xlsx` 원본 관리 및 item별 JSONL 자동 생성 결정을 추가함.
 
-## 2026-05-01 gold.xlsx 보강 기록
+## 2026-05-01 gold.xlsx 보강 기록 (확장됨: 현재는 unit별 skeleton Excel도 허용)
 
 - `AGENTS.md`의 프로젝트 핵심 원칙에 `datasets/gold/gold.xlsx`가 정규식 gold의 사람 관리 원본임을 추가함.
 - `PROJECT_SPEC.md`의 파일 구조에 `datasets/gold/gold.xlsx`와 `datasets/dict/dict.xlsx` 위치를 명시함.
@@ -740,7 +765,7 @@
 - TP/FP 최종 라벨과 span은 사람이 확정하고, LLM 판단은 임시 참고용으로만 사용한다는 원칙을 재확인함.
 - positive/negative 예문은 각각 100개가 모일 때까지 batch 검색과 사람 검수를 반복하기로 함.
 
-## 2026-05-01 브릿지 및 형태소 분석 cache 원칙 기록
+## 2026-05-01 브릿지 및 형태소 분석 cache 원칙 기록 (변경됨: 현재는 공용 bridge registry 우선)
 
 - 브릿지는 무조건 채택하지 않고 비교 실험 후 채택하기로 기록함.
 - 먼저 넓은 정규식으로 gold recall=1을 확보하기로 함.
@@ -753,7 +778,7 @@
 - 모든 300개 규칙이 항상 공유하는 것이 아니라, 난이도 단계나 목표 문법항목 범위에 따라 필요한 규칙만 공유할 수 있다는 단서를 기록함.
 - Kiwi는 후보 중 하나로 두고, 상업 라이선스, 속도, 정확도, 배포 조건 및 다른 형태소 분석기 가능성을 나중에 반드시 비교하기로 함.
 
-## 2026-05-01 df003 bridge candidate 추가
+## 2026-05-01 df003 bridge candidate 추가 (변경됨: 이후 `adnominal_n` 공용 bridge로 채택)
 
 - 이전 프로젝트의 `build_silver.py`/`infer_step1.py`를 확인해 관형형 브릿지의 핵심이 `ㄴ/은` 구성요소를 명시적 `은/ㄴ/ᆫ` 또는 앞 음절 종성 `ㄴ`으로 복구하는 방식임을 확인함.
 - 그 원리를 순수 Python `re`에서 쓸 수 있도록 종성 `ㄴ` 음절 class를 사용한 `v2_bridge_candidate` 정규식으로 정리함.
@@ -826,7 +851,7 @@
   - `python3 -m src.detector.export_bundle --dict datasets/dict/dict.xlsx --out configs/detector/detector_bundle.json` → `warnings=0`
   - df003 bundle sentence/overlap 평가 모두 `gold_recall=1.0`, `fn_count=0`
   - 기존 regex v1/v2 평가 모두 `gold_recall=1.0`, `fn_count=0`
-  - `active_unit_ids` 누락 실행과 `ps_neunde` 기본 실행이 의도대로 `ValueError`를 발생시키는지 확인함.
+  - `active_unit_ids` 누락 실행과 당시 구명칭/실험용 `ps_neunde` 기본 실행이 의도대로 `ValueError`를 발생시키는지 확인함.
 
 ## 2026-05-01 기준 문서 일관성 정리
 

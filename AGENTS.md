@@ -16,16 +16,21 @@
 ## 프로젝트 핵심 원칙
 
 - 목표는 300개 한국어 문법항목에 대해 `검색용 정규식 + 오탐 필터링 인코더` 구축을 위한 positive/negative 예문을 반자동으로 만드는 것입니다.
-- Phase 1에서는 `ㄴ/은 적 있/없` 계열인 df003 pilot 하나를 끝까지 완성합니다.
+- Phase 1에서는 df003 pilot을 완료했고, 현재는 ps_id 기반 polyset task인 `ps_ce002`까지 같은 자동화 구조를 확장합니다.
 - 현재 단계의 목표는 예문 구축 자동화이며, 인코더 미세조정은 아직 수행하지 않습니다.
 - 정규식의 `recall=1`은 전체 한국어에서의 절대 recall이 아니라, 사람이 만든 정규식 골드 50개 기준의 recall=1을 뜻합니다.
-- 정규식 gold의 사람 관리 원본은 `datasets/gold/gold.xlsx`입니다.
-- `exported_gold/{item_id}_gold_50.jsonl`은 `gold.xlsx`에서 자동 생성되는 검증용 산출물이며, 사람이 직접 관리하는 원본으로 취급하지 않습니다.
+- 정규식 gold의 사람 관리 원본은 Excel입니다. 현재 반복 자동화에서는 `datasets/gold/gold_ps_??.xlsx` 같은 item/polyset-specific skeleton Excel도 받을 수 있고, 장기 aggregate로 `gold.xlsx`를 둘 수 있습니다.
+- `exported_gold/{unit_id}_gold_50.jsonl`은 gold Excel에서 자동 생성되는 검증용 산출물이며, 사람이 직접 관리하는 원본으로 취급하지 않습니다.
+- 문법항목 사전의 사람 관리 원본도 Excel입니다. 단일 item은 `e_id`, polyset task는 `ps_id`를 detect/encoder task unit으로 사용하며, runtime은 항상 Excel에서 생성한 detector bundle을 읽습니다.
 - LLM은 정규식 초안, FN 원인 분석, 수정안 제안, TP/FP 임시 판단에 사용할 수 있지만, 최종 gold label을 결정하지 않습니다.
 - TP/FP 최종 판정과 애매한 사례의 기준 확정은 사람이 합니다.
 - 검색용 정규식은 gold recall=1을 유지하는 조건에서만 말뭉치 FP를 줄이는 방향으로 수정합니다.
-- 검색용 정규식 단계에서는 먼저 넓은 정규식으로 gold recall=1을 확보한 뒤, 브릿지 후보 버전을 별도로 만들어 비교합니다. 브릿지는 gold recall=1을 유지하고 5,000행 말뭉치에서 FP 감소 효과가 있거나 span 경계가 좋아질 때만 채택하며, 효과가 작고 복잡도만 늘면 보류합니다.
+- 검색용 정규식 단계에서는 먼저 넓은 정규식으로 gold recall=1을 확보합니다. 브릿지는 문법항목별 정규식 복붙이 아니라 `rule_components.bridge_id`와 공용 bridge registry로 연결하며, gold recall과 corpus FP/span 품질에 실제 도움이 될 때 채택합니다.
 - 일반 말뭉치 검색은 공통 prepared corpus batch를 만든 뒤 DetectorEngine으로 검색합니다. batch_002부터 예문 구축 batch 비율은 일상대화 5,000행, 뉴스 700행, 비출판물 2,000행, 학습자 말뭉치 2,500행입니다. batch_000/001은 이전 비율로 생성된 산출물이므로 그대로 보존합니다.
+- 규칙 수정은 gold FN 또는 사람이 확정한 systematic FP를 근거로만 수행합니다. Codex/LLM 임시 판단만으로 dict rule을 수정하지 않습니다.
+- corpus review 후 `FP/TP <= 2`이면 규칙 다듬기를 멈추고 결과를 제출합니다. `FP/TP > 2`이고 `processed_batches < 3`이면 안전한 systematic FP 제거 규칙만 검토합니다.
+- `processed_batches >= 3`이면 batch 추가와 규칙 다듬기를 중단하고 현재 확보량으로 다음 판단을 합니다. `processed_batches`는 검색된 batch 수가 아니라 사람이 labeled review를 완료해 summary에 반영한 batch 수입니다.
+- 규칙을 수정한 뒤에는 반드시 bundle을 재생성하고 gold 50 recall test를 다시 실행합니다. gold recall이 1보다 낮아지는 수정은 채택하지 않습니다.
 
 ## Phase 1 금지 사항
 
