@@ -241,6 +241,12 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 5. 확정된 검색용 정규식으로 다음 prepared corpus batch를 추가 검색합니다.
 6. 사람이 TP/FP/span을 검수하여 positive/negative 예문을 각각 100개 모을 때까지 반복합니다.
 
+구현상 corpus search와 review 파일 생성은 `src/run_corpus_review_batch.py`를 기본 wrapper로 사용합니다. 이 wrapper는 bundle을 새로 만들지 않고, 이미 생성된 `--bundle`과 `--gold`를 다시 평가해 gold gate를 통과한 경우에만 `search_corpus.py`와 `prepare_codex_review.py` 경로를 실행합니다. `gold_recall < 1` 또는 `fn_count > 0`이면 일반 말뭉치 검색을 차단합니다.
+
+`run_corpus_review_batch.py`는 `prepare_codex_review.py` 이후 `apply_first_pass_review.py`를 실행해 Codex 1차 검토 파일 3개를 생성합니다. 이 단계는 `human_label`과 `span_status`를 수정하지 않고 `codex_review_label`, `codex_review_span_status`, `codex_review_reason`, `codex_review_note`, `codex_checked`만 채웁니다. First-pass Excel/CSV에서는 검토자가 바로 볼 수 있도록 `codex_review_label`, `codex_review_span_status`, `codex_review_reason`, `codex_review_note`를 `regex_match_text` 바로 오른쪽에 배치합니다.
+
+운영상 `*_codex_review.csv/xlsx`는 span parse와 검토 열을 정리한 base/intermediate 파일입니다. `*_codex_review_first_pass.csv/xlsx`가 생성되면 사람이 실제로 열어 2차 확인과 최종 `human_label`/`span_status` 입력을 준비할 기준 파일은 first-pass 파일입니다. 새 unit에 대한 first-pass profile이 아직 없으면 `apply_first_pass_review.py`는 자동 TP/FP 참고값을 넣지 않고 `profile_status=missing`을 report에 기록합니다. 이 상태는 corpus search 실패가 아니며, `run_corpus_review_batch.py`는 해당 단계를 `skipped_no_profile`로 남기고 전체 run은 계속 완료합니다.
+
 문법항목별 기본 수집 정책:
 
 - `target_pos=100`
@@ -352,9 +358,12 @@ CLI 호환성:
 | `HanTalk_work/corpus/example_making/prepared/example_making_batch_###.jsonl` | 여러 말뭉치에서 stable hash sampling으로 만든 공통 검색 batch | 자동화 | `search_corpus.py` |
 | `HanTalk_arti/example_making/{unit_id}/{unit_id}_batch_###_detection.jsonl` | DetectorEngine 검색 결과 원본 | 자동화 | 사람 + 검수/분석 CLI |
 | `HanTalk_arti/example_making/{unit_id}/{unit_id}_batch_###_human_review.csv` | 사람 검수용 후보 표 | 자동화 | 사람 검수 |
-| `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_codex_review.csv` | Codex 1차 검토용 후보 표. 자동 TP/FP 판정은 포함하지 않음 | 자동화 | Codex 1차 검토 + 사람 최종 검수 |
-| `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_codex_review.xlsx` | Codex 1차 검토용 Excel 사본 | 자동화 | Codex 1차 검토 + 사람 최종 검수 |
-| `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_codex_review_report.json` | Codex 검토 파일 준비 상태와 span parse report | 자동화 | 사람 + Codex |
+| `HanTalk_arti/example_making/{unit_id}/{unit_id}_batch_###_codex_review.csv` | Codex 검토 준비용 base/intermediate 후보 표. 자동 TP/FP 판정은 포함하지 않음 | 자동화 | first-pass 생성 또는 수동 검토 |
+| `HanTalk_arti/example_making/{unit_id}/{unit_id}_batch_###_codex_review.xlsx` | Codex 검토 준비용 Excel 사본 | 자동화 | first-pass 생성 또는 수동 검토 |
+| `HanTalk_arti/example_making/{unit_id}/{unit_id}_batch_###_codex_review_report.json` | Codex 검토 파일 준비 상태와 span parse report | 자동화 | 사람 + Codex |
+| `HanTalk_arti/example_making/{unit_id}/{unit_id}_batch_###_codex_review_first_pass.csv` | Codex 1차 참고 label/span_status/reason을 포함한 사람 작업 기준 CSV. profile이 없으면 blank/no-profile 템플릿 | 자동화 | 사람 최종 검수 |
+| `HanTalk_arti/example_making/{unit_id}/{unit_id}_batch_###_codex_review_first_pass.xlsx` | Codex 1차 검토가 반영된 사람 작업 기준 Excel | 자동화 | 사람 최종 검수 |
+| `HanTalk_arti/example_making/{unit_id}/{unit_id}_batch_###_codex_review_first_pass_report.json` | first-pass profile 상태, advisory label count, 열 배치 정책 report | 자동화 | 사람 + Codex |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_human_review_labeled.xlsx` | 사람이 확정한 TP/FP/span 검수 완료본 | 사람 | `summarize_review.py`, dataset export CLI |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_human_review_labeled.csv` | 사람이 확정한 TP/FP/span 검수 완료본의 CSV 사본 | 사람 또는 자동 변환 | `summarize_review.py`, dataset export CLI |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_review_summary.json` | labeled review 파일 누적 집계와 목표 달성 여부 | 자동화 | 사람 + 다음 batch 판단 |
@@ -1116,6 +1125,7 @@ Phase 1에서 아래 명령 계열이 동작하는 것을 목표로 합니다. d
 python3 src/test_gold.py --item-id df003 --bundle configs/detector/detector_bundle.json --active-unit-id df003 --fail-on-fn
 python3 -m src.detector.export_bundle --dict datasets/dict/dict_ps_ce002.xlsx --out configs/detector/detector_bundle_ps_ce002.json
 python3 src/test_gold.py --item-id ps_ce002 --gold exported_gold/ps_ce002_gold_50.jsonl --bundle configs/detector/detector_bundle_ps_ce002.json --active-unit-id ps_ce002 --allow-polyset --bundle-match-policy overlap --fail-on-fn
+python3 -m src.run_corpus_review_batch --unit-id ps_ce002 --gold exported_gold/ps_ce002_gold_50.jsonl --bundle configs/detector/detector_bundle_ps_ce002.json --manifest configs/corpus/example_making_manifest.json --corpus-root /Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making --prepared-root /Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared --artifact-root /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making --batch-index 2 --allow-polyset
 python3 -m src.prepare_example_corpus --manifest configs/corpus/example_making_manifest.json --corpus-root /Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making --batch-index 2 --out /Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_002.jsonl --report /Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_002_report.json
 python3 -m src.search_corpus --bundle configs/detector/detector_bundle.json --input-jsonl /Users/yonghyunnam/coding/HanTalk_group/HanTalk_work/corpus/example_making/prepared/example_making_batch_002.jsonl --active-unit-id df003 --artifact-root /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making
 python3 -m src.summarize_review --item-id df003 --input /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/df003/df003_batch_002_human_review_labeled.xlsx --artifact-root /Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making

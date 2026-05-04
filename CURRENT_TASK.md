@@ -5,7 +5,7 @@
 - Current phase: Phase 1 pilot
 - Current item: ps_ce002 `ㄴ/은/는데` polyset task (`ce002`, `ce003`)
 - Current project goal: 300개 문법항목의 검색용 정규식 및 오탐 필터링 인코더용 positive/negative 예문 구축 자동화
-- Current immediate goal: 장기 기억 문서 4개를 현재 기준으로 정리한 뒤, ps_ce002 corpus search/review loop로 넘어가기
+- Current immediate goal: ps_ce002 batch_002 human/Codex review 파일 검수 및 TP/FP/span 분석 시작
 
 ## 현재 기준 요약
 
@@ -16,6 +16,7 @@
 - 사용자는 새 unit 자동화 시작 시 `datasets/dict/dict_ps_??.xlsx`와 `datasets/gold/gold_ps_??.xlsx` skeleton Excel을 제공할 수 있습니다.
 - JSONL gold와 detector bundle은 Excel에서 자동 생성하는 산출물입니다. bundle을 직접 수정해 Excel로 되돌리지 않습니다.
 - ps_ce002 최신 검증 상태:
+  - 초기 skeleton `dict_ps_ce002.xlsx`에서 `polysets.detect_ruleset_id`와 1차 detect rule을 다시 채움
   - `exported_gold/ps_ce002_gold_50.jsonl` 생성 완료
   - `configs/detector/detector_bundle_ps_ce002.json` 생성 완료
   - gold 50 기준 `gold_recall=1.0`, `span_exact_recall=1.0`, `fn_count=0`, `component_span_success_count=50`
@@ -32,6 +33,43 @@
   - summary JSON에서는 이 상한을 `collection_policy.max_processed_batches`로 기록합니다. CLI는 호환성을 위해 `--max-batches`를 유지합니다.
   - `summarize_review.py`는 `rule_refinement_status.should_consider_rule_update`와 `reason`으로 rule update 후보 검토 필요 여부를 기록합니다. 별도 `next_action`은 추가하지 않습니다.
 - 현재는 인코더 학습을 실행하지 않습니다. 여러 문법항목의 TP/FP export가 충분히 쌓인 뒤 전체 aggregate 기준으로 학습합니다.
+- `src/run_corpus_review_batch.py`를 추가했습니다.
+  - bundle export는 하지 않고, 이미 생성된 `--bundle`과 `--gold`를 gold gate로 재평가합니다.
+  - `gold_recall=1.0`, `fn_count=0`인 경우에만 prepared corpus/search/Codex review 파일 생성을 진행합니다.
+  - 후보가 0개인 batch도 실패로 보지 않고 `prepare_codex_review` 단계를 `skipped_no_candidates`로 기록합니다.
+  - smoke test에서 `ps_ce002` 기준 gold gate, prepared corpus 생성, search, `human_review.csv`, `codex_review.xlsx`, `run_report.json` 생성까지 통과했습니다.
+- 초기 skeleton `dict_ps_ce002.xlsx`/`gold_ps_ce002.xlsx`에서 다시 자동화를 실행해 batch_002 review 산출물을 생성했습니다.
+  - `polysets.detect_ruleset_id=rs_ps_ce002_d01`와 `detect_rules.r_ps_ce002_d01`를 다시 채움
+  - gold gate: `gold_total=50`, `gold_recall=1.0`, `span_exact_recall=1.0`, `component_span_success_count=50`, `fn_count=0`
+  - prepared corpus: 기존 `example_making_batch_002.jsonl` 재사용
+  - search input: 10,200 rows
+  - hit texts: 1,143
+  - candidates: 1,199
+  - domain candidates: 일상대화 817, 뉴스 49, 비출판물 197, 학습자 136
+  - span source: `component_spans=1199`
+  - component status: `ok=1199`
+  - generated files:
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_batch_002_detection.jsonl`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_batch_002_human_review.csv`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_batch_002_codex_review.csv`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_batch_002_codex_review.xlsx`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_batch_002_run_report.json`
+  - early observation: `그런데`, `근데` 같은 discourse connective/colloquial 후보도 잡히므로 human review에서 FP 여부와 교육 항목 포함 기준을 확인해야 합니다.
+- ps_ce002 batch_002 Codex 1차 TP/FP/span 검토 파일을 생성했습니다.
+  - input: `ps_ce002_batch_002_codex_review.csv`
+  - output:
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_batch_002_codex_review_first_pass.csv`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_batch_002_codex_review_first_pass.xlsx`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_batch_002_codex_review_first_pass_report.json`
+  - `src/apply_first_pass_review.py`를 공식 first-pass 생성 CLI로 추가했고, `run_corpus_review_batch.py`가 이 단계를 자동 실행하도록 연결함
+  - first-pass 파일의 열 순서는 `regex_match_text` 바로 오른쪽에 `codex_review_label`, `codex_review_span_status`, `codex_review_reason`, `codex_review_note`가 오도록 고정함
+  - 새 unit에 first-pass profile이 없으면 실패가 아니라 `profile_status=missing`, wrapper step `skipped_no_profile`로 기록하고 blank/no-profile first-pass 파일을 사람 검수용 템플릿으로 넘기도록 정리함
+  - 사람이 실제로 열어 최종 검수를 준비할 기준 파일은 `*_codex_review_first_pass.xlsx/csv`입니다. `*_codex_review.xlsx/csv`는 first-pass 생성 전 base/intermediate 산출물입니다.
+  - Codex 1차 label counts: `tp=915`, `fp=282`, `unclear=2`
+  - Codex 1차 span status counts: `ok=917`, `not_applicable=282`
+  - `human_label`과 `span_status`는 비워 둠. 최종 라벨은 사람이 채우는 `human_label` 기준입니다.
+  - 주요 FP 1차 유형: `근데`, `그런데`, `가운데/파운데이션`, `군데`, `팬데믹`, `원데이`, `온데간데`
+  - `천데`, `끈데`는 비표준/오타 가능성이 있어 `unclear`로 남김
 
 아래 “누적 완료 이력”과 이후 날짜별 기록은 historical log입니다. 오래된 결정이 현재 기준과 다를 수 있으며, 보존 가치가 있는 과거 시도는 복기용으로 남깁니다.
 
@@ -276,7 +314,7 @@
   - 기존 `allow_experimental_polyset`은 호환용으로 유지함
 - `dict_ps_ce002.xlsx`에 `polysets.detect_ruleset_id=rs_ps_ce002_d01`과 `detect_rules.ps_id=ps_ce002` 기반 1차 detect rule을 추가함
   - initial `r_ps_ce002_d01`: `(?:는데|은데|[가-힣]데)`
-  - current `r_ps_ce002_d01`: `(?:는데|은데|[종성 ㄴ 음절 class]데)` 형태. `[가-힣]데`보다 좁게, Unicode Hangul 조합 규칙으로 생성한 종성 ㄴ 음절 399개만 허용함
+  - current `r_ps_ce002_d01`: `[종성 ㄴ 음절 class]데` 형태. `[가-힣]데`보다 좁게, Unicode Hangul 조합 규칙으로 생성한 종성 ㄴ 음절 399개만 허용함
   - `rule_components.bridge_id=nde`를 통해 component span 조립까지 연결함
 - ps_ce002 전용 개발 bundle 생성 완료
   - `configs/detector/detector_bundle_ps_ce002.json`
@@ -297,6 +335,13 @@
   - 종성 ㄴ/ㄹ 같은 Hangul syllable character class를 기계적으로 생성하는 작은 유틸임
   - 정규식 전체를 자동 작성하지 않고, 사람이/Codex가 설계한 detect regex 안의 기계적 부품만 생성하는 용도임
   - `src/detector/bridges.py`의 종성 ㄴ 판별도 이 유틸을 재사용하도록 정리함
+- 2026-05-04 초기 skeleton 업로드본에서 ps_ce002 자동화를 다시 실행함
+  - skeleton 상태: `polysets.detect_ruleset_id`와 `detect_rules` 행이 비어 있었고, `rule_components.bridge_id=nde`는 유지되어 있었음
+  - 채운 값: `polysets.detect_ruleset_id=rs_ps_ce002_d01`, `detect_rules.r_ps_ce002_d01`
+  - detect pattern: `[종성 ㄴ 음절 class]데`
+  - `python3 -m src.export_gold ... --expected-count 50` 통과
+  - `python3 -m src.detector.export_bundle ... detector_bundle_ps_ce002.json` 결과 `warnings=0`
+  - `python3 src/test_gold.py ... --allow-polyset --bundle-match-policy overlap --fail-on-fn` 결과 `gold_recall=1.0`, `span_exact_recall=1.0`, `component_span_success_count=50`, `fn_count=0`
 
 ## 이번에 테스트한 것
 

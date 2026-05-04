@@ -300,3 +300,11 @@ Reason: 일부 문법항목은 FP가 거의 없거나 반대로 특정 말뭉치
 ### Decision: skeleton dict bootstrap은 필요한 detect 연결만 먼저 채운다.
 
 Reason: 사용자가 제공하는 초기 dict skeleton에는 `polysets.detect_ruleset_id`, `verify_ruleset_id`, component gap, detect/verify rule이 비어 있을 수 있다. 자동화는 처음부터 모든 빈칸을 채우지 않고, gold recall loop에 필요한 `detect_ruleset_id`와 1차 detect rule만 우선 작성한다. `verify_ruleset_id`, hard_fail verify rule, `component_id`, `min_gap_to_next`, `max_gap_to_next`는 corpus FP/span 분석을 통해 필요성이 확인될 때만 추가한다.
+
+### Decision: corpus review batch wrapper는 bundle을 생성하지 않고 검증된 bundle만 사용한다.
+
+Reason: corpus search 자동화 wrapper가 dict Excel에서 bundle까지 자동 생성하면, 사람이 확인해야 하는 bundle export warning과 gold recall gate가 흐려질 수 있다. 따라서 `src/run_corpus_review_batch.py`는 이미 생성된 `--bundle`과 `--gold`를 입력으로 받아 gold gate를 다시 확인한 뒤, 통과한 경우에만 prepared corpus/search/Codex review 파일 생성을 수행한다. Bundle export와 dict 수정은 별도 단계로 유지한다.
+
+### Decision: first-pass review profile 부재는 corpus search 실패로 처리하지 않는다.
+
+Reason: 새 문법항목은 corpus search 결과를 먼저 봐야 Codex 1차 검토 profile을 설계할 수 있다. first-pass profile이 없다는 이유로 `run_corpus_review_batch.py`를 실패시키면 신규 unit 자동화가 시작 단계에서 막힌다. 따라서 `apply_first_pass_review.py`는 profile이 없을 때 `profile_status=missing`을 report에 기록하고, `run_corpus_review_batch.py`는 해당 단계를 `skipped_no_profile`로 남기되 전체 run은 계속 완료한다. 사람이 열어 작업할 기준 파일은 `*_codex_review_first_pass.xlsx/csv`이며, profile이 없는 경우 이 파일은 blank/no-profile 수동 검토 템플릿 역할을 한다.

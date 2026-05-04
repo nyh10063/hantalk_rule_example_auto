@@ -29,6 +29,8 @@
 - 검색용 정규식은 gold recall=1을 유지하는 조건에서만 말뭉치 FP를 줄이는 방향으로 수정합니다.
 - 검색용 정규식 단계에서는 먼저 넓은 정규식으로 gold recall=1을 확보합니다. 브릿지는 문법항목별 정규식 복붙이 아니라 `rule_components.bridge_id`와 공용 bridge registry로 연결하며, gold recall과 corpus FP/span 품질에 실제 도움이 될 때 채택합니다.
 - 일반 말뭉치 검색은 공통 prepared corpus batch를 만든 뒤 DetectorEngine으로 검색합니다. batch_002부터 예문 구축 batch 비율은 일상대화 5,000행, 뉴스 700행, 비출판물 2,000행, 학습자 말뭉치 2,500행입니다. batch_000/001은 이전 비율로 생성된 산출물이므로 그대로 보존합니다.
+- gold recall=1을 통과한 unit의 corpus search와 human/Codex review 파일 생성은 `src/run_corpus_review_batch.py`를 우선 사용합니다. 이 wrapper는 bundle을 생성하지 않고, 이미 생성된 `--bundle`과 `--gold`를 다시 평가해 gold gate를 통과한 경우에만 검색을 실행합니다.
+- `run_corpus_review_batch.py`는 `*_codex_review.*` 이후 `*_codex_review_first_pass.*`를 생성합니다. 사람이 실제로 열어 작업할 기준 파일은 first-pass 파일입니다. 해당 unit의 first-pass profile이 없으면 실패가 아니라 `skipped_no_profile`로 기록하고, blank/no-profile 템플릿을 사람 검수용으로 넘깁니다.
 - 규칙 수정은 gold FN 또는 사람이 확정한 systematic FP를 근거로만 수행합니다. Codex/LLM 임시 판단만으로 dict rule을 수정하지 않습니다.
 - corpus review 후 `FP/TP <= 2`이면 규칙 다듬기를 멈추고 결과를 제출합니다. `FP/TP > 2`이고 `processed_batches < 3`이면 안전한 systematic FP 제거 규칙만 검토합니다.
 - `processed_batches >= 3`이면 batch 추가와 규칙 다듬기를 중단하고 현재 확보량으로 다음 판단을 합니다. `processed_batches`는 검색된 batch 수가 아니라 사람이 labeled review를 완료해 summary에 반영한 batch 수입니다.
