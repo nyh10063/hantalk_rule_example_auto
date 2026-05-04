@@ -40,6 +40,21 @@ FIRST_PASS_COLUMNS = [
 BUILTIN_PROFILE_BY_ITEM_ID = {
     "ps_ce002": "ps_ce002_v1",
 }
+REASON_LABEL_KO = {
+    "lexicalized_discourse_marker_geureonde": "그런데 계열 접속부사",
+    "lexicalized_discourse_marker_geunde": "근데 담화표지/접속부사",
+    "place_noun_gunde": "군데 장소/수량 명사",
+    "copula_contracted_gunde": "군데/인데 축약 가능",
+    "lexical_noun_or_loanword": "가운데/외래어 단어 내부",
+    "loanword_pandemic": "팬데믹 단어 내부",
+    "loanword_or_title_oneday": "원데이/고유명 표현 내부",
+    "lexicalized_ondegande": "온데간데 단어 내부",
+    "noisy_or_nonstandard_form": "비표준/오타 가능 후보",
+    "productive_connective_ending": "생산적 연결어미 후보",
+    "tentative_connective_ending": "형태상 연결어미 후보",
+    "unclassified": "미분류 후보",
+    "no_first_pass_profile": "1차 검토 profile 없음",
+}
 
 
 def _now_utc() -> str:
@@ -49,6 +64,10 @@ def _now_utc() -> str:
 def _write_json(path: Path, obj: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+
+
+def _reason_label_ko(reason: str) -> str:
+    return REASON_LABEL_KO.get(reason, reason or "빈 이유")
 
 
 def _validate_headers(path: Path, headers: list[str]) -> list[str]:
@@ -311,7 +330,9 @@ def apply_first_pass_review(
     label_counts: Counter[str] = Counter()
     span_status_counts: Counter[str] = Counter()
     reason_counts: Counter[str] = Counter()
-    examples_by_reason: dict[str, list[dict[str, str]]] = defaultdict(list)
+    reason_ko_counts: Counter[str] = Counter()
+    examples_by_reason_code: dict[str, list[dict[str, str]]] = defaultdict(list)
+    examples_by_reason_ko: dict[str, list[dict[str, str]]] = defaultdict(list)
 
     for row in rows:
         out_row = dict(row)
@@ -328,15 +349,20 @@ def apply_first_pass_review(
         label_counts[label or "blank"] += 1
         span_status_counts[span_status or "blank"] += 1
         reason_counts[reason] += 1
-        if len(examples_by_reason[reason]) < 5:
-            examples_by_reason[reason].append(
-                {
-                    "hit_id": out_row.get("hit_id", ""),
-                    "span_text": out_row.get("span_text", ""),
-                    "raw_text": out_row.get("raw_text", ""),
-                    "codex_review_label": label,
-                }
-            )
+        reason_ko = _reason_label_ko(reason)
+        reason_ko_counts[reason_ko] += 1
+        example = {
+            "hit_id": out_row.get("hit_id", ""),
+            "span_text": out_row.get("span_text", ""),
+            "raw_text": out_row.get("raw_text", ""),
+            "codex_review_label": label,
+            "codex_review_reason_code": reason,
+            "codex_review_reason_ko": reason_ko,
+        }
+        if len(examples_by_reason_code[reason]) < 5:
+            examples_by_reason_code[reason].append(example)
+        if len(examples_by_reason_ko[reason_ko]) < 5:
+            examples_by_reason_ko[reason_ko].append(example)
 
     _write_csv(out_csv, output_rows, output_columns)
     _write_xlsx(out_xlsx, output_rows, output_columns)
@@ -356,7 +382,14 @@ def apply_first_pass_review(
         "codex_review_label_counts": dict(sorted(label_counts.items())),
         "codex_review_span_status_counts": dict(sorted(span_status_counts.items())),
         "codex_review_reason_counts": dict(reason_counts.most_common()),
-        "examples_by_reason": dict(examples_by_reason),
+        "codex_review_reason_ko_counts": dict(reason_ko_counts.most_common()),
+        "examples_by_reason": dict(examples_by_reason_ko),
+        "examples_by_reason_code": dict(examples_by_reason_code),
+        "reason_label_policy": {
+            "codex_review_reason": "stable_machine_code",
+            "examples_by_reason": "korean_human_readable_key",
+            "examples_by_reason_code": "stable_machine_code_key",
+        },
         "column_policy": {
             "first_pass_columns_after": "regex_match_text",
             "first_pass_columns": FIRST_PASS_COLUMNS,

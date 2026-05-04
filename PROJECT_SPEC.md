@@ -247,6 +247,8 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 
 운영상 `*_codex_review.csv/xlsx`는 span parse와 검토 열을 정리한 base/intermediate 파일입니다. `*_codex_review_first_pass.csv/xlsx`가 생성되면 사람이 실제로 열어 2차 확인과 최종 `human_label`/`span_status` 입력을 준비할 기준 파일은 first-pass 파일입니다. 새 unit에 대한 first-pass profile이 아직 없으면 `apply_first_pass_review.py`는 자동 TP/FP 참고값을 넣지 않고 `profile_status=missing`을 report에 기록합니다. 이 상태는 corpus search 실패가 아니며, `run_corpus_review_batch.py`는 해당 단계를 `skipped_no_profile`로 남기고 전체 run은 계속 완료합니다.
 
+First-pass report에서 `codex_review_reason` 값은 장기 집계와 비교를 위한 stable machine code로 유지합니다. 대신 사람이 빠르게 읽는 `examples_by_reason`과 `codex_review_reason_ko_counts`는 한국어 label을 key로 사용하고, 원래 code 기준 grouping은 `examples_by_reason_code`에 함께 보존합니다.
+
 문법항목별 기본 수집 정책:
 
 - `target_pos=100`

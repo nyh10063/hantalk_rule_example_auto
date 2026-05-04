@@ -65,6 +65,7 @@
   - first-pass 파일의 열 순서는 `regex_match_text` 바로 오른쪽에 `codex_review_label`, `codex_review_span_status`, `codex_review_reason`, `codex_review_note`가 오도록 고정함
   - 새 unit에 first-pass profile이 없으면 실패가 아니라 `profile_status=missing`, wrapper step `skipped_no_profile`로 기록하고 blank/no-profile first-pass 파일을 사람 검수용 템플릿으로 넘기도록 정리함
   - 사람이 실제로 열어 최종 검수를 준비할 기준 파일은 `*_codex_review_first_pass.xlsx/csv`입니다. `*_codex_review.xlsx/csv`는 first-pass 생성 전 base/intermediate 산출물입니다.
+  - first-pass report의 `examples_by_reason` key는 한국어 label로 출력하고, 기존 영어 reason code grouping은 `examples_by_reason_code`에 보존하도록 수정함
   - Codex 1차 label counts: `tp=915`, `fp=282`, `unclear=2`
   - Codex 1차 span status counts: `ok=917`, `not_applicable=282`
   - `human_label`과 `span_status`는 비워 둠. 최종 라벨은 사람이 채우는 `human_label` 기준입니다.
