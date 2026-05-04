@@ -2,8 +2,8 @@
   "schema_version": "hantalk_detector_bundle_v1",
   "source": {
     "dict_xlsx": "datasets/dict/dict_ps_ce002.xlsx",
-    "source_sha256": "5815fb195e0b79e64cb8aa28d775271f1ceaea1495273a9362d8dd0624b084c8",
-    "generated_at": "2026-05-04T04:53:58.678211+00:00"
+    "source_sha256": "7dcbef11bb2785031166cda4c834a565f1ea287783110a4cd33872c8df4c6573",
+    "generated_at": "2026-05-04T06:55:47.490992+00:00"
   },
   "items_by_e_id": {
     "ce002": {
@@ -84,6 +84,40 @@
         "rule_type": "surface_regex",
         "engine": "re"
       }
+    ],
+    "rs_ps_ce002_v01": [
+      {
+        "e_id": "ps_ce002",
+        "unit_id": "ps_ce002",
+        "source_e_id": null,
+        "ps_id": "ps_ce002",
+        "ruleset_id": "rs_ps_ce002_v01",
+        "rule_id": "r_ps_ce002_v01",
+        "stage": "verify",
+        "target": "component_text",
+        "pattern": "^(?:텐데|근데|원데|팬데)$",
+        "priority": 10,
+        "hard_fail": true,
+        "component_id": "c1",
+        "rule_type": "surface_regex",
+        "engine": "re"
+      },
+      {
+        "e_id": "ps_ce002",
+        "unit_id": "ps_ce002",
+        "source_e_id": null,
+        "ps_id": "ps_ce002",
+        "ruleset_id": "rs_ps_ce002_v01",
+        "rule_id": "r_ps_ce002_v02",
+        "stage": "verify",
+        "target": "left_plus_component_text",
+        "pattern": "^(?:그런데|가운데|파운데)$",
+        "priority": 20,
+        "hard_fail": true,
+        "component_id": "c1",
+        "rule_type": "surface_regex",
+        "engine": "re"
+      }
     ]
   },
   "polysets_by_id": {
@@ -104,7 +138,7 @@
       "encoder_gloss": "다음 의미를 포함하는 연결어미: 앞절의 상황·배경을 제시하고 뒤절로 이어지게 하는 연결어미; 앞절과 뒤절이 대조·대립 혹은 양보적 전환, 반전되는 관계로 이어질 때 쓰는 연결어미",
       "note": null,
       "detect_ruleset_id": "rs_ps_ce002_d01",
-      "verify_ruleset_id": null,
+      "verify_ruleset_id": "rs_ps_ce002_v01",
       "detect_form": "ㄴ/은/는데"
     }
   },
@@ -122,7 +156,9 @@
       "detect_ruleset_ids": [
         "rs_ps_ce002_d01"
       ],
-      "verify_ruleset_ids": []
+      "verify_ruleset_ids": [
+        "rs_ps_ce002_v01"
+      ]
     }
   },
   "warnings": []

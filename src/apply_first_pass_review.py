@@ -37,6 +37,10 @@ FIRST_PASS_COLUMNS = [
     "codex_review_reason",
     "codex_review_note",
 ]
+HUMAN_REVIEW_COLUMNS = [
+    "human_label",
+    "span_status",
+]
 BUILTIN_PROFILE_BY_ITEM_ID = {
     "ps_ce002": "ps_ce002_v1",
 }
@@ -228,11 +232,12 @@ def _classify_row(row: dict[str, str], profile_id: str) -> tuple[str, str, str, 
 
 
 def _build_output_columns(input_columns: list[str]) -> list[str]:
-    columns = [column for column in input_columns if column not in FIRST_PASS_COLUMNS]
+    review_columns = HUMAN_REVIEW_COLUMNS + FIRST_PASS_COLUMNS
+    columns = [column for column in input_columns if column not in review_columns]
     if "regex_match_text" not in columns:
-        return columns + [column for column in FIRST_PASS_COLUMNS if column not in columns]
+        return columns + review_columns
     insert_at = columns.index("regex_match_text") + 1
-    return columns[:insert_at] + FIRST_PASS_COLUMNS + columns[insert_at:]
+    return columns[:insert_at] + review_columns + columns[insert_at:]
 
 
 def _csv_cell(value: Any) -> str:
@@ -391,7 +396,9 @@ def apply_first_pass_review(
             "examples_by_reason_code": "stable_machine_code_key",
         },
         "column_policy": {
-            "first_pass_columns_after": "regex_match_text",
+            "human_review_columns_after": "regex_match_text",
+            "human_review_columns": HUMAN_REVIEW_COLUMNS,
+            "first_pass_columns_after": "span_status",
             "first_pass_columns": FIRST_PASS_COLUMNS,
         },
         "policy": {

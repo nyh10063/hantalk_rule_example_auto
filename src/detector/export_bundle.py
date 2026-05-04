@@ -54,9 +54,15 @@ REQUIRED_COLUMNS = {
 
 VALID_GROUPS = {"a", "b", "c"}
 VALID_STAGES = {"detect", "verify"}
+COMPONENT_SCOPED_TARGETS = {
+    "component_right_context",
+    "component_left_context",
+    "component_text",
+    "left_plus_component_text",
+}
 VALID_TARGETS_BY_STAGE = {
     "detect": {"raw_sentence"},
-    "verify": {"raw_sentence", "char_window", "component_right_context"},
+    "verify": {"raw_sentence", "char_window", *COMPONENT_SCOPED_TARGETS},
 }
 VALID_ORDER_POLICIES = {"fx", "fl"}
 TASK_UNIT_ID_COLUMNS = ("unit_id", "ps_id", "e_id")
@@ -407,10 +413,10 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
             allowed = ", ".join(sorted(VALID_TARGETS_BY_STAGE[stage]))
             raise BundleExportError(f"detect_rules:{row_no} target={target!r} invalid for stage={stage}; allowed: {allowed}")
         component_id = _text(row.get("component_id"))
-        if target == "component_right_context":
+        if target in COMPONENT_SCOPED_TARGETS:
             if component_id is None:
                 raise BundleExportError(
-                    f"detect_rules:{row_no} target=component_right_context requires component_id for rule_id={rule_id}"
+                    f"detect_rules:{row_no} target={target} requires component_id for rule_id={rule_id}"
                 )
             if component_id not in component_ids_by_e_id.get(unit_id, set()):
                 known = ", ".join(sorted(component_ids_by_e_id.get(unit_id, set())))

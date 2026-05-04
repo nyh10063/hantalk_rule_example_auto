@@ -22,6 +22,7 @@ try:
     from .prepare_example_corpus import prepare_corpus
     from .search_corpus import search_corpus
     from .test_gold import evaluate_detector_bundle
+    from .validate_dict_bundle_sync import validate_dict_bundle_sync
 except ImportError:  # pragma: no cover - supports direct script execution.
     from apply_first_pass_review import apply_first_pass_review
     from detector.engine import DetectorEngine
@@ -29,6 +30,7 @@ except ImportError:  # pragma: no cover - supports direct script execution.
     from prepare_example_corpus import prepare_corpus
     from search_corpus import search_corpus
     from test_gold import evaluate_detector_bundle
+    from validate_dict_bundle_sync import validate_dict_bundle_sync
 
 
 SCHEMA_VERSION = "hantalk_corpus_review_batch_run_v1"
@@ -82,6 +84,7 @@ def _output_paths(*, artifact_root: Path, unit_id: str, batch_label: str) -> dic
         "first_pass_csv": item_dir / f"{unit_id}_{batch_label}_codex_review_first_pass.csv",
         "first_pass_xlsx": item_dir / f"{unit_id}_{batch_label}_codex_review_first_pass.xlsx",
         "first_pass_report_json": item_dir / f"{unit_id}_{batch_label}_codex_review_first_pass_report.json",
+        "dict_bundle_sync_report_json": item_dir / f"{unit_id}_{batch_label}_dict_bundle_sync_report.json",
         "run_report_json": item_dir / f"{unit_id}_{batch_label}_run_report.json",
     }
 
@@ -111,6 +114,7 @@ def _guard_outputs(paths: dict[str, Path], *, overwrite: bool) -> None:
         "first_pass_csv",
         "first_pass_xlsx",
         "first_pass_report_json",
+        "dict_bundle_sync_report_json",
         "run_report_json",
     ]
     if overwrite:
@@ -137,6 +141,14 @@ def _new_report(
     prepared_report_json: Path,
     outputs: dict[str, Path],
 ) -> dict[str, Any]:
+    sync_enabled = bool(args.dict_xlsx) and not bool(args.skip_dict_bundle_sync)
+    if sync_enabled:
+        sync_step_status = "pending"
+    elif args.dict_xlsx:
+        sync_step_status = "skipped_by_flag"
+    else:
+        sync_step_status = "skipped_no_dict"
+
     return {
         "schema_version": SCHEMA_VERSION,
         "unit_id": unit_id,
@@ -151,15 +163,19 @@ def _new_report(
             "prepared_jsonl": str(prepared_jsonl),
             "prepared_report_json": str(prepared_report_json),
             "allow_polyset": bool(args.allow_polyset),
+            "dict": str(args.dict_xlsx) if args.dict_xlsx else None,
+            "dict_bundle_sync_enabled": sync_enabled,
         },
         "steps": {
             "gold_gate": {"status": "pending"},
+            "dict_bundle_sync": {"status": sync_step_status},
             "prepare_corpus": {"status": "pending"},
             "search_corpus": {"status": "pending"},
             "prepare_codex_review": {"status": "pending"},
             "first_pass_review": {"status": "pending"},
         },
         "gold_gate": None,
+        "dict_bundle_sync": None,
         "prepare_corpus_summary": None,
         "search_summary": None,
         "codex_review_summary": None,
@@ -174,6 +190,7 @@ def _new_report(
             "first_pass_csv": str(outputs["first_pass_csv"]),
             "first_pass_xlsx": str(outputs["first_pass_xlsx"]),
             "first_pass_report_json": str(outputs["first_pass_report_json"]),
+            "dict_bundle_sync_report_json": str(outputs["dict_bundle_sync_report_json"]),
             "run_report_json": str(outputs["run_report_json"]),
         },
         "review_workflow": {
@@ -181,7 +198,7 @@ def _new_report(
             "human_working_file": str(outputs["first_pass_xlsx"]),
             "human_working_file_policy": (
                 "Use *_codex_review_first_pass.xlsx/csv as the human working file when generated. "
-                "It preserves the base codex_review columns and places Codex first-pass columns after regex_match_text. "
+                "It preserves the base codex_review columns and places human/Codex review columns after regex_match_text. "
                 "If no first-pass profile exists, the run is not failed; labels remain blank/no-profile for manual review."
             ),
         },
@@ -234,6 +251,12 @@ def run_corpus_review_batch(args: argparse.Namespace) -> dict[str, Any]:
         label="detector bundle",
         hint="Run src.detector.export_bundle first and confirm warnings/gold recall before corpus search.",
     )
+    if args.dict_xlsx is not None:
+        _ensure_input_file(
+            args.dict_xlsx,
+            label="dict Excel",
+            hint="Pass the dict Excel SSOT used to generate --bundle, or omit --dict to skip sync validation.",
+        )
     _ensure_input_file(args.manifest, label="corpus manifest", hint="Pass configs/corpus/example_making_manifest.json.")
     if not args.corpus_root.exists():
         raise FileNotFoundError(f"corpus root not found: {args.corpus_root}")
@@ -284,6 +307,51 @@ def run_corpus_review_batch(args: argparse.Namespace) -> dict[str, Any]:
             return report
         report["steps"]["gold_gate"] = {"status": "ok"}
 
+        if args.dict_xlsx is None:
+            report["steps"]["dict_bundle_sync"] = {
+                "status": "skipped_no_dict",
+                "note": "No --dict was provided, so dict/bundle sync validation was not run.",
+            }
+        elif args.skip_dict_bundle_sync:
+            report["steps"]["dict_bundle_sync"] = {
+                "status": "skipped_by_flag",
+                "note": "--skip-dict-bundle-sync was set. This should be used only for intentional diagnostics.",
+            }
+        else:
+            sync_report = validate_dict_bundle_sync(
+                dict_xlsx=args.dict_xlsx,
+                bundle_path=args.bundle,
+                unit_id=unit_id,
+                report_json=outputs["dict_bundle_sync_report_json"],
+            )
+            report["dict_bundle_sync"] = {
+                "in_sync": sync_report.get("in_sync"),
+                "diff_count": sync_report.get("diff_count"),
+                "dict_export_warning_count": sync_report.get("dict_export_warning_count"),
+                "dict_unit_exists": sync_report.get("dict_unit_exists"),
+                "bundle_unit_exists": sync_report.get("bundle_unit_exists"),
+                "report_json": str(outputs["dict_bundle_sync_report_json"]),
+                "diffs_preview": (sync_report.get("diffs") or [])[:20],
+            }
+            if not sync_report.get("in_sync"):
+                report["steps"]["dict_bundle_sync"] = {
+                    "status": "blocked",
+                    "report_json": str(outputs["dict_bundle_sync_report_json"]),
+                    "diff_count": sync_report.get("diff_count"),
+                    "note": (
+                        "The dict Excel SSOT and runtime bundle differ for this unit. "
+                        "Regenerate the bundle from the dict or intentionally rerun with --skip-dict-bundle-sync."
+                    ),
+                }
+                report["status"] = "blocked"
+                report["failure_reason"] = "dict_bundle_mismatch"
+                return report
+            report["steps"]["dict_bundle_sync"] = {
+                "status": "ok",
+                "report_json": str(outputs["dict_bundle_sync_report_json"]),
+                "dict_export_warning_count": sync_report.get("dict_export_warning_count"),
+            }
+
         if prepared["prepared_jsonl"].exists():
             report["steps"]["prepare_corpus"] = {
                 "status": "skipped_existing",
@@ -325,10 +393,14 @@ def run_corpus_review_batch(args: argparse.Namespace) -> dict[str, Any]:
             "n_texts_with_hits": search_report.get("n_texts_with_hits"),
             "n_texts_with_hits_by_domain": search_report.get("n_texts_with_hits_by_domain"),
             "n_candidates": search_report.get("n_candidates"),
+            "n_candidates_before_verify": search_report.get("n_candidates_before_verify"),
+            "n_candidates_after_verify": search_report.get("n_candidates_after_verify"),
+            "n_candidates_hard_failed": search_report.get("n_candidates_hard_failed"),
             "n_candidates_by_domain": search_report.get("n_candidates_by_domain"),
             "n_candidates_by_unit_id": search_report.get("n_candidates_by_unit_id"),
             "span_source_counts": search_report.get("span_source_counts"),
             "component_span_status_counts": search_report.get("component_span_status_counts"),
+            "detector_summary_totals": search_report.get("detector_summary_totals"),
             "elapsed_sec": search_report.get("elapsed_sec"),
         }
 
@@ -425,6 +497,16 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help="Detector bundle path. Must already exist; run src.detector.export_bundle first.",
     )
     parser.add_argument(
+        "--dict",
+        dest="dict_xlsx",
+        type=Path,
+        default=None,
+        help=(
+            "Optional dict Excel SSOT used to generate --bundle. When provided, this runner "
+            "validates dict/bundle sync by default before corpus search."
+        ),
+    )
+    parser.add_argument(
         "--manifest",
         required=True,
         type=Path,
@@ -469,6 +551,14 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Regenerate unit-specific output files if they already exist.",
     )
+    parser.add_argument(
+        "--skip-dict-bundle-sync",
+        action="store_true",
+        help=(
+            "Skip dict/bundle sync validation even when --dict is provided. "
+            "Use only for intentional diagnostics; normal runs should leave this off."
+        ),
+    )
     parser.add_argument("--seed", type=int, default=None, help="Override manifest seed when preparing a missing corpus batch.")
     return parser
 
@@ -491,6 +581,12 @@ def main(argv: list[str] | None = None) -> int:
                 "failure_reason": report.get("failure_reason"),
                 "gold_recall": (report.get("gold_gate") or {}).get("gold_recall"),
                 "fn_count": (report.get("gold_gate") or {}).get("fn_count"),
+                "dict_bundle_sync": {
+                    "status": (report.get("steps") or {}).get("dict_bundle_sync", {}).get("status"),
+                    "in_sync": (report.get("dict_bundle_sync") or {}).get("in_sync"),
+                    "diff_count": (report.get("dict_bundle_sync") or {}).get("diff_count"),
+                    "report_json": (report.get("dict_bundle_sync") or {}).get("report_json"),
+                },
                 "n_candidates": (report.get("search_summary") or {}).get("n_candidates"),
                 "human_review_csv": report["outputs"]["human_review_csv"],
                 "codex_review_xlsx": report["outputs"]["codex_review_xlsx"],

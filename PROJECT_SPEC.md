@@ -243,7 +243,9 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 
 구현상 corpus search와 review 파일 생성은 `src/run_corpus_review_batch.py`를 기본 wrapper로 사용합니다. 이 wrapper는 bundle을 새로 만들지 않고, 이미 생성된 `--bundle`과 `--gold`를 다시 평가해 gold gate를 통과한 경우에만 `search_corpus.py`와 `prepare_codex_review.py` 경로를 실행합니다. `gold_recall < 1` 또는 `fn_count > 0`이면 일반 말뭉치 검색을 차단합니다.
 
-`run_corpus_review_batch.py`는 `prepare_codex_review.py` 이후 `apply_first_pass_review.py`를 실행해 Codex 1차 검토 파일 3개를 생성합니다. 이 단계는 `human_label`과 `span_status`를 수정하지 않고 `codex_review_label`, `codex_review_span_status`, `codex_review_reason`, `codex_review_note`, `codex_checked`만 채웁니다. First-pass Excel/CSV에서는 검토자가 바로 볼 수 있도록 `codex_review_label`, `codex_review_span_status`, `codex_review_reason`, `codex_review_note`를 `regex_match_text` 바로 오른쪽에 배치합니다.
+`--dict`가 제공되면 `run_corpus_review_batch.py`는 gold gate 통과 후 corpus search 전에 dict/bundle sync 검사를 기본 실행합니다. 이 검사는 dict Excel을 메모리에서 다시 bundle로 export한 뒤 요청한 `unit_id`의 runtime unit, rule_components slice, detect/verify ruleset, rule pattern을 현재 `--bundle`과 비교합니다. 이 단계는 dict나 bundle을 수정하지 않습니다. 불일치가 있으면 top-level `status=blocked`, `failure_reason=dict_bundle_mismatch`로 멈추고 `{unit_id}_batch_###_dict_bundle_sync_report.json`을 남깁니다. 의도적 진단 목적이 아니면 `--skip-dict-bundle-sync`를 쓰지 않습니다.
+
+`run_corpus_review_batch.py`는 `prepare_codex_review.py` 이후 `apply_first_pass_review.py`를 실행해 Codex 1차 검토 파일 3개를 생성합니다. 이 단계는 `human_label`과 `span_status`를 수정하지 않고 `codex_review_label`, `codex_review_span_status`, `codex_review_reason`, `codex_review_note`, `codex_checked`만 채웁니다. First-pass Excel/CSV에서는 검토자가 바로 볼 수 있도록 `human_label`, `span_status`, `codex_review_label`, `codex_review_span_status`, `codex_review_reason`, `codex_review_note`를 `regex_match_text` 바로 오른쪽에 배치합니다.
 
 운영상 `*_codex_review.csv/xlsx`는 span parse와 검토 열을 정리한 base/intermediate 파일입니다. `*_codex_review_first_pass.csv/xlsx`가 생성되면 사람이 실제로 열어 2차 확인과 최종 `human_label`/`span_status` 입력을 준비할 기준 파일은 first-pass 파일입니다. 새 unit에 대한 first-pass profile이 아직 없으면 `apply_first_pass_review.py`는 자동 TP/FP 참고값을 넣지 않고 `profile_status=missing`을 report에 기록합니다. 이 상태는 corpus search 실패가 아니며, `run_corpus_review_batch.py`는 해당 단계를 `skipped_no_profile`로 남기고 전체 run은 계속 완료합니다.
 
@@ -366,6 +368,7 @@ CLI 호환성:
 | `HanTalk_arti/example_making/{unit_id}/{unit_id}_batch_###_codex_review_first_pass.csv` | Codex 1차 참고 label/span_status/reason을 포함한 사람 작업 기준 CSV. profile이 없으면 blank/no-profile 템플릿 | 자동화 | 사람 최종 검수 |
 | `HanTalk_arti/example_making/{unit_id}/{unit_id}_batch_###_codex_review_first_pass.xlsx` | Codex 1차 검토가 반영된 사람 작업 기준 Excel | 자동화 | 사람 최종 검수 |
 | `HanTalk_arti/example_making/{unit_id}/{unit_id}_batch_###_codex_review_first_pass_report.json` | first-pass profile 상태, advisory label count, 열 배치 정책 report | 자동화 | 사람 + Codex |
+| `HanTalk_arti/example_making/{unit_id}/{unit_id}_batch_###_dict_bundle_sync_report.json` | dict Excel SSOT와 실행 bundle의 unit slice 동기화 검사 report. 불일치 시 corpus search 차단 | 자동화 | 사람 + Codex |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_human_review_labeled.xlsx` | 사람이 확정한 TP/FP/span 검수 완료본 | 사람 | `summarize_review.py`, dataset export CLI |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_human_review_labeled.csv` | 사람이 확정한 TP/FP/span 검수 완료본의 CSV 사본 | 사람 또는 자동 변환 | `summarize_review.py`, dataset export CLI |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_review_summary.json` | labeled review 파일 누적 집계와 목표 달성 여부 | 자동화 | 사람 + 다음 batch 판단 |
@@ -442,9 +445,9 @@ engine = re
 - `stage=verify`는 후보를 새로 만들지 않고, 이미 생성된 후보를 제거하는 hard_fail 용도로만 사용합니다.
 - `verify` 규칙은 100% 확실한 오탐일 때만 hard_fail을 발생시킵니다.
 - `stage=detect`인 규칙의 `target`은 항상 `raw_sentence`여야 합니다.
-- `stage=verify`인 규칙의 `target`은 `raw_sentence`, `char_window`, `component_right_context`를 허용합니다.
-- `target=component_right_context`는 candidate 안의 특정 component span 바로 오른쪽 문자열만 검증합니다. 이 target을 쓰는 rule은 `component_id`를 반드시 지정해야 합니다.
-- `component_right_context`에서 해당 `component_id`의 span을 찾지 못하면, recall 보호를 위해 그 verify rule은 적용하지 않고 candidate를 유지합니다.
+- `stage=verify`인 규칙의 `target`은 `raw_sentence`, `char_window`, `component_right_context`, `component_left_context`, `component_text`, `left_plus_component_text`를 허용합니다.
+- `component_right_context`, `component_left_context`, `component_text`, `left_plus_component_text`는 candidate 안의 특정 component span을 기준으로 검증합니다. 이 target들을 쓰는 rule은 `component_id`를 반드시 지정해야 합니다.
+- component-scoped target에서 해당 `component_id`의 span을 찾지 못하면, recall 보호를 위해 그 verify rule은 적용하지 않고 candidate를 유지합니다.
 - 이전 프로젝트 코드의 `token_window`는 실제로 토큰 단위가 아니라 문자 단위 후보 주변 window이므로, 새 규칙 모듈을 만들 때 `char_window`로 이름을 바꿉니다.
 - 같은 `stage` 안에서는 `priority`가 작은 규칙부터 실행합니다.
 - `priority`의 숫자가 작을수록 더 강한 우선순위를 가집니다.
@@ -611,7 +614,14 @@ span_end
 
 `char_window`의 `window_chars`는 후보 span envelope 기준 좌우 각각 N자를 뜻합니다.
 
-`component_right_context`의 `window_chars`는 지정한 component span 끝 위치 기준 오른쪽 N자를 뜻합니다. 예를 들어 df003의 `component_id=c2`는 실제 선택된 `적` component를 가리키며, `pattern=^\s*(?:으로|인|일|에)`는 그 `적` 바로 뒤가 `으로`, `인`, `일`, `에`일 때만 hard fail을 발생시킵니다. 이 target은 먼저 full `component_spans[component_id]`를 보고, 없으면 보조 정보인 `partial_component_spans[component_id]`를 봅니다. 둘 다 없으면 recall 보호를 위해 해당 verify rule을 skip합니다.
+component-scoped verify target 정의:
+
+- `component_text`: 선택된 component span 자체의 문자열입니다. 예: `근데`, `텐데`, `운데`, `런데`.
+- `component_left_context`: 선택된 component 시작점 바로 왼쪽의 첫 non-space 문자 1개입니다.
+- `component_right_context`: 선택된 component 끝 바로 오른쪽의 첫 non-space 문자 1개입니다.
+- `left_plus_component_text`: `component_left_context`와 `component_text`를 붙인 문자열입니다. 예: `가운데=가+운데`, `그런데=그+런데`.
+
+이 target들은 먼저 full `component_spans[component_id]`를 보고, 없으면 보조 정보인 `partial_component_spans[component_id]`를 봅니다. 둘 다 없으면 recall 보호를 위해 해당 verify rule을 skip합니다. `char_window`만 후보 span envelope 기준 `window_chars`를 사용하며, component-scoped left/right context는 안전성을 위해 1글자 non-space context로 고정합니다.
 
 `export_bundle.py` validation 원칙:
 

@@ -324,6 +324,9 @@ def search_corpus(
         "n_component_span_success": int(span_source_counts.get("component_spans", 0)),
         "n_component_span_fallback": int(span_source_counts.get("regex_match_fallback", 0)),
         "n_component_span_regex_only": int(span_source_counts.get("regex_match", 0)),
+        "n_candidates_before_verify": int(detector_summary_totals.get("n_candidates_before_verify", 0)),
+        "n_candidates_after_verify": int(detector_summary_totals.get("n_candidates_after_verify", 0)),
+        "n_candidates_hard_failed": int(detector_summary_totals.get("n_candidates_hard_failed", 0)),
         "detector_summary_totals": dict(sorted(detector_summary_totals.items())),
         "elapsed_sec": elapsed_sec,
     }

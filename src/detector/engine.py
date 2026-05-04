@@ -310,7 +310,30 @@ class DetectorEngine:
                         raw_text=raw_text,
                         candidate=candidate,
                         rule=rule,
-                        window_chars=window_chars,
+                    )
+                    if haystack is None:
+                        continue
+                elif rule.get("target") == "component_left_context":
+                    haystack = self._component_left_context(
+                        raw_text=raw_text,
+                        candidate=candidate,
+                        rule=rule,
+                    )
+                    if haystack is None:
+                        continue
+                elif rule.get("target") == "component_text":
+                    haystack = self._component_text(
+                        raw_text=raw_text,
+                        candidate=candidate,
+                        rule=rule,
+                    )
+                    if haystack is None:
+                        continue
+                elif rule.get("target") == "left_plus_component_text":
+                    haystack = self._left_plus_component_text(
+                        raw_text=raw_text,
+                        candidate=candidate,
+                        rule=rule,
                     )
                     if haystack is None:
                         continue
@@ -319,19 +342,84 @@ class DetectorEngine:
                     hard_fail_rule_ids.append(rule["rule_id"])
         return hard_fail_rule_ids
 
-    @staticmethod
+    @classmethod
     def _component_right_context(
+        cls,
         *,
         raw_text: str,
         candidate: dict[str, Any],
         rule: dict[str, Any],
-        window_chars: int,
     ) -> str | None:
-        """Return text to the right of a selected component span.
+        """Return the first non-space character to the right of a component span.
 
         If the candidate has no component span for the requested component_id,
         the verify rule is skipped to protect recall.
         """
+        span = cls._component_span(candidate=candidate, rule=rule)
+        if span is None:
+            return None
+        component_end = int(span[1])
+        for idx in range(component_end, len(raw_text)):
+            ch = raw_text[idx]
+            if not ch.isspace():
+                return ch
+        return ""
+
+    @classmethod
+    def _component_left_context(
+        cls,
+        *,
+        raw_text: str,
+        candidate: dict[str, Any],
+        rule: dict[str, Any],
+    ) -> str | None:
+        """Return the first non-space character to the left of a component span."""
+        span = cls._component_span(candidate=candidate, rule=rule)
+        if span is None:
+            return None
+        component_start = int(span[0])
+        for idx in range(component_start - 1, -1, -1):
+            ch = raw_text[idx]
+            if not ch.isspace():
+                return ch
+        return ""
+
+    @classmethod
+    def _component_text(
+        cls,
+        *,
+        raw_text: str,
+        candidate: dict[str, Any],
+        rule: dict[str, Any],
+    ) -> str | None:
+        """Return the selected component span text."""
+        span = cls._component_span(candidate=candidate, rule=rule)
+        if span is None:
+            return None
+        return raw_text[int(span[0]) : int(span[1])]
+
+    @classmethod
+    def _left_plus_component_text(
+        cls,
+        *,
+        raw_text: str,
+        candidate: dict[str, Any],
+        rule: dict[str, Any],
+    ) -> str | None:
+        """Return left one-character context concatenated with component text."""
+        left = cls._component_left_context(raw_text=raw_text, candidate=candidate, rule=rule)
+        text = cls._component_text(raw_text=raw_text, candidate=candidate, rule=rule)
+        if left is None or text is None:
+            return None
+        return f"{left}{text}"
+
+    @staticmethod
+    def _component_span(
+        *,
+        candidate: dict[str, Any],
+        rule: dict[str, Any],
+    ) -> list[int] | None:
+        """Return full or partial component span for a component-scoped verify rule."""
         component_id = rule.get("component_id")
         if not component_id:
             return None
@@ -342,8 +430,7 @@ class DetectorEngine:
             span = partial_component_spans.get(str(component_id))
         if not span or len(span) != 2:
             return None
-        component_end = int(span[1])
-        return raw_text[component_end : min(len(raw_text), component_end + window_chars)]
+        return [int(span[0]), int(span[1])]
 
     @staticmethod
     def _strip_realtime_fields(candidate: dict[str, Any]) -> dict[str, Any]:

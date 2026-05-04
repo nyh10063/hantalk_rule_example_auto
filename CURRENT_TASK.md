@@ -35,6 +35,9 @@
 - 현재는 인코더 학습을 실행하지 않습니다. 여러 문법항목의 TP/FP export가 충분히 쌓인 뒤 전체 aggregate 기준으로 학습합니다.
 - `src/run_corpus_review_batch.py`를 추가했습니다.
   - bundle export는 하지 않고, 이미 생성된 `--bundle`과 `--gold`를 gold gate로 재평가합니다.
+  - `--dict`가 제공되면 gold gate 통과 후 corpus search 전에 dict/bundle sync 검사를 기본 실행합니다.
+  - sync 검사는 dict Excel을 메모리에서 다시 bundle로 export하고 현재 `--bundle`의 해당 unit slice만 비교합니다. 비교 대상에는 runtime unit, 해당 unit의 `rule_components`, detect/verify rule이 포함됩니다. dict나 bundle을 자동 수정하지 않습니다.
+  - dict와 bundle이 다르면 `status=blocked`, `failure_reason=dict_bundle_mismatch`로 멈추고 `{unit_id}_batch_###_dict_bundle_sync_report.json`을 남깁니다.
   - `gold_recall=1.0`, `fn_count=0`인 경우에만 prepared corpus/search/Codex review 파일 생성을 진행합니다.
   - 후보가 0개인 batch도 실패로 보지 않고 `prepare_codex_review` 단계를 `skipped_no_candidates`로 기록합니다.
   - smoke test에서 `ps_ce002` 기준 gold gate, prepared corpus 생성, search, `human_review.csv`, `codex_review.xlsx`, `run_report.json` 생성까지 통과했습니다.
@@ -62,7 +65,7 @@
     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_batch_002_codex_review_first_pass.xlsx`
     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_batch_002_codex_review_first_pass_report.json`
   - `src/apply_first_pass_review.py`를 공식 first-pass 생성 CLI로 추가했고, `run_corpus_review_batch.py`가 이 단계를 자동 실행하도록 연결함
-  - first-pass 파일의 열 순서는 `regex_match_text` 바로 오른쪽에 `codex_review_label`, `codex_review_span_status`, `codex_review_reason`, `codex_review_note`가 오도록 고정함
+  - first-pass 파일의 열 순서는 `regex_match_text` 바로 오른쪽에 `human_label`, `span_status`, `codex_review_label`, `codex_review_span_status`, `codex_review_reason`, `codex_review_note`가 오도록 고정함
   - 새 unit에 first-pass profile이 없으면 실패가 아니라 `profile_status=missing`, wrapper step `skipped_no_profile`로 기록하고 blank/no-profile first-pass 파일을 사람 검수용 템플릿으로 넘기도록 정리함
   - 사람이 실제로 열어 최종 검수를 준비할 기준 파일은 `*_codex_review_first_pass.xlsx/csv`입니다. `*_codex_review.xlsx/csv`는 first-pass 생성 전 base/intermediate 산출물입니다.
   - first-pass report의 `examples_by_reason` key는 한국어 label로 출력하고, 기존 영어 reason code grouping은 `examples_by_reason_code`에 보존하도록 수정함
@@ -71,6 +74,15 @@
   - `human_label`과 `span_status`는 비워 둠. 최종 라벨은 사람이 채우는 `human_label` 기준입니다.
   - 주요 FP 1차 유형: `근데`, `그런데`, `가운데/파운데이션`, `군데`, `팬데믹`, `원데이`, `온데간데`
   - `천데`, `끈데`는 비표준/오타 가능성이 있어 `unclear`로 남김
+- ps_ce002 systematic FP 제거를 위해 component-scoped verify target을 확장했습니다.
+  - 새 verify target: `component_text`, `component_left_context`, `left_plus_component_text`
+  - `component_right_context`는 component 오른쪽 첫 non-space 문자 1개로 대칭 정의함
+  - `dict_ps_ce002.xlsx`에 `polysets.verify_ruleset_id=rs_ps_ce002_v01` 추가
+  - `r_ps_ce002_v01`: `target=component_text`, `component_id=c1`, `pattern=^(?:텐데|근데|원데|팬데)$`
+  - `r_ps_ce002_v02`: `target=left_plus_component_text`, `component_id=c1`, `pattern=^(?:그런데|가운데|파운데)$`
+  - smoke 결과: `그런데`, `근데`, `가운데`, `원데이`, `팬데믹`, `텐데`는 hard fail, `가는데`, `파는데`, `추운데`, `더운데`, `좋은데`, `했는데`는 유지
+  - gold 50 재검증 결과: `gold_recall=1.0`, `span_exact_recall=1.0`, `component_span_success_count=50`, `fn_count=0`
+  - batch_002 재생성 후 candidates: `1199 -> 908`, first-pass label counts: `tp=902`, `fp=4`, `unclear=2`
 
 아래 “누적 완료 이력”과 이후 날짜별 기록은 historical log입니다. 오래된 결정이 현재 기준과 다를 수 있으며, 보존 가치가 있는 과거 시도는 복기용으로 남깁니다.
 
