@@ -2,7 +2,7 @@
   "item_id": "ps_df004",
   "eval_mode": "detector_bundle",
   "eval_id": "bundle_ps_df004_overlap",
-  "bundle_path": "/private/tmp/detector_bundle_ps_df004_context_check.json",
+  "bundle_path": "configs/detector/detector_bundle_ps_df004.json",
   "active_unit_ids": [
     "ps_df004"
   ],
@@ -28,5 +28,5 @@
   "span_exact_count": 50,
   "span_exact_recall": 1.0,
   "hard_failed_candidate_count": 0,
-  "created_at": "2026-05-05T04:37:41.764839+00:00"
+  "created_at": "2026-05-05T06:45:37.564133+00:00"
 }

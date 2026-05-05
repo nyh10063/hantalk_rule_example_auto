@@ -5,7 +5,8 @@ This runner is used after sampled batch review indicates that TP examples are
 too sparse for ordinary batch repetition. It never loads the full corpus into
 memory. Instead, it prepares/searches 10,200-row shards using the top-level
 example-making sampling ratio, applies Codex first-pass review, and stops when
-the advisory TP count reaches a target.
+the advisory TP count reaches a target or the advisory FP/unclear review burden
+reaches its cap.
 
 Codex first-pass labels are advisory only. Human labels remain final.
 """
@@ -50,6 +51,8 @@ SCHEMA_VERSION = "hantalk_full_corpus_review_run_v1"
 SHARD_SCHEMA_VERSION = "hantalk_full_corpus_review_shard_v1"
 GOLD_BUNDLE_MATCH_POLICY = "overlap"
 DEFAULT_TARGET_FIRST_PASS_TP = 150
+DEFAULT_MAX_FIRST_PASS_FP = 500
+DEFAULT_MAX_FIRST_PASS_UNCLEAR = 500
 DEFAULT_MAX_SHARDS = 50
 DEFAULT_BACKFILL_DOMAIN = "news"
 LABEL_KEYS = ("tp", "fp", "unclear", "blank")
@@ -203,6 +206,18 @@ def _accumulate_shard_counts(cumulative: Counter[str], shard: dict[str, Any]) ->
     cumulative["first_pass_fp"] += label_counts["fp"]
     cumulative["first_pass_unclear"] += label_counts["unclear"]
     cumulative["first_pass_blank"] += label_counts["blank"]
+
+
+def _first_pass_cap_stop_reason(cumulative: Counter[str], args: argparse.Namespace) -> str | None:
+    fp_reached = cumulative["first_pass_fp"] >= args.max_first_pass_fp
+    unclear_reached = cumulative["first_pass_unclear"] >= args.max_first_pass_unclear
+    if fp_reached and unclear_reached:
+        return "first_pass_fp_and_unclear_cap_reached"
+    if fp_reached:
+        return "first_pass_fp_cap_reached"
+    if unclear_reached:
+        return "first_pass_unclear_cap_reached"
+    return None
 
 
 def _initial_domain_state(base_quota: dict[str, int]) -> dict[str, dict[str, Any]]:
@@ -668,6 +683,10 @@ def run_full_corpus_review(args: argparse.Namespace) -> dict[str, Any]:
         raise ValueError("--max-shards must be > 0")
     if args.target_first_pass_tp <= 0:
         raise ValueError("--target-first-pass-tp must be > 0")
+    if args.max_first_pass_fp <= 0:
+        raise ValueError("--max-first-pass-fp must be > 0")
+    if args.max_first_pass_unclear <= 0:
+        raise ValueError("--max-first-pass-unclear must be > 0")
     for path, label in [
         (args.gold, "gold JSONL"),
         (args.bundle, "detector bundle"),
@@ -692,6 +711,8 @@ def run_full_corpus_review(args: argparse.Namespace) -> dict[str, Any]:
         "created_at": _now_utc(),
         "mode": "full_corpus_offline_sharded",
         "target_first_pass_tp": args.target_first_pass_tp,
+        "max_first_pass_fp": args.max_first_pass_fp,
+        "max_first_pass_unclear": args.max_first_pass_unclear,
         "target_basis": "codex_first_pass_advisory_label_not_human_final",
         "max_shards": args.max_shards,
         "start_shard_index": args.start_shard_index,
@@ -812,7 +833,11 @@ def run_full_corpus_review(args: argparse.Namespace) -> dict[str, Any]:
                 domain_state = _copy_domain_state(sampling.get("domain_state_after") or domain_state)
                 _accumulate_shard_counts(cumulative, prior_shard)
 
-            if cumulative["first_pass_tp"] >= args.target_first_pass_tp:
+            cap_stop_reason = _first_pass_cap_stop_reason(cumulative, args)
+            if cap_stop_reason is not None:
+                report["stop_reason"] = cap_stop_reason
+                report["target_reached"] = False
+            elif cumulative["first_pass_tp"] >= args.target_first_pass_tp:
                 report["stop_reason"] = "target_first_pass_tp_reached"
                 report["target_reached"] = True
 
@@ -851,6 +876,11 @@ def run_full_corpus_review(args: argparse.Namespace) -> dict[str, Any]:
             domain_state = _copy_domain_state(sampling.get("domain_state_after") or domain_state)
             _accumulate_shard_counts(cumulative, shard)
 
+            cap_stop_reason = _first_pass_cap_stop_reason(cumulative, args)
+            if cap_stop_reason is not None:
+                report["stop_reason"] = cap_stop_reason
+                report["target_reached"] = False
+                break
             if cumulative["first_pass_tp"] >= args.target_first_pass_tp:
                 report["stop_reason"] = "target_first_pass_tp_reached"
                 report["target_reached"] = True
@@ -896,6 +926,12 @@ def run_full_corpus_review(args: argparse.Namespace) -> dict[str, Any]:
         report["failure_reason"] = None
         if report["stop_reason"] == "max_shards_reached":
             report["next_step_hint"] = "Inspect merged first-pass file or rerun with a larger --max-shards value."
+        elif report["stop_reason"] in {
+            "first_pass_fp_cap_reached",
+            "first_pass_unclear_cap_reached",
+            "first_pass_fp_and_unclear_cap_reached",
+        }:
+            report["next_step_hint"] = "Advisory FP/unclear review cap was reached. Review the merged first-pass file with currently found examples."
         elif report["stop_reason"] == "backfill_domain_exhausted_before_target":
             report["next_step_hint"] = "Backfill domain was exhausted before advisory TP target. Review the merged first-pass file with currently found examples."
         elif report["stop_reason"] == "all_corpora_exhausted_before_target":
@@ -925,6 +961,18 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--artifact-root", required=True, type=Path, help="Artifact root for unit-specific outputs.")
     parser.add_argument("--start-shard-index", type=int, default=0, help="Full-corpus shard index to start from.")
     parser.add_argument("--target-first-pass-tp", type=int, default=DEFAULT_TARGET_FIRST_PASS_TP)
+    parser.add_argument(
+        "--max-first-pass-fp",
+        type=int,
+        default=DEFAULT_MAX_FIRST_PASS_FP,
+        help="Stop and submit the merged first-pass file when advisory FP count reaches this cap. Default: 500.",
+    )
+    parser.add_argument(
+        "--max-first-pass-unclear",
+        type=int,
+        default=DEFAULT_MAX_FIRST_PASS_UNCLEAR,
+        help="Stop and submit the merged first-pass file when advisory unclear count reaches this cap. Default: 500.",
+    )
     parser.add_argument("--max-shards", type=int, default=DEFAULT_MAX_SHARDS)
     parser.add_argument(
         "--backfill-domain",
@@ -956,6 +1004,8 @@ def main(argv: list[str] | None = None) -> int:
                 "failure_reason": report.get("failure_reason"),
                 "stop_reason": report.get("stop_reason"),
                 "target_first_pass_tp": report.get("target_first_pass_tp"),
+                "max_first_pass_fp": report.get("max_first_pass_fp"),
+                "max_first_pass_unclear": report.get("max_first_pass_unclear"),
                 "target_reached": report.get("target_reached"),
                 "cumulative": report.get("cumulative"),
                 "shards_processed": report.get("shards_processed"),

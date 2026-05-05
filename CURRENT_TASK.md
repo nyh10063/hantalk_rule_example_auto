@@ -38,13 +38,34 @@
 - `src/run_full_corpus_review.py`를 추가했습니다.
   - 전체 말뭉치를 한 번에 읽지 않고 10,200행 shard 단위로 `prepare_corpus -> search_corpus -> prepare_codex_review -> apply_first_pass_review`를 실행합니다.
   - top-level sampling 비율을 강제 사용합니다: 일상대화 5,000 / 뉴스 700 / 비출판물 2,000 / 학습자 2,500.
-  - 기본 중단 기준은 advisory first-pass TP 150개 또는 `max_shards=50`입니다.
+  - 기본 중단 기준은 advisory first-pass TP 150개, advisory FP 500개, advisory unclear 500개, 또는 `max_shards=50`입니다.
+  - FP/unclear 상한은 사람 검수 부담을 막기 위한 안전장치입니다. TP 목표 전이라도 먼저 도달하면 현재 merged first-pass 결과를 제출합니다.
   - 기존 shard report가 있으면 schema와 `domain_state_after`를 검증한 뒤 `skipped_existing_report`로 누적해 재시작 비용을 줄입니다.
   - domain 고갈 시 이후 shard에서 해당 domain을 건너뛰고 부족분을 `news`에 backfill합니다.
   - cursor는 requested가 아니라 selected row 수만큼 전진합니다.
   - `selected < requested`이면 해당 domain을 exhausted로 표시하고 `exhausted_reason=selected_below_requested`를 기록합니다.
   - `news`까지 고갈되면 backfill chain을 만들지 않고 정상 종료한 뒤 현재까지 찾은 merged first-pass 결과를 제출합니다.
   - ps_df004 smoke: `/private/tmp`에서 `--max-shards 1` 실행 성공, `n_input_texts=10200`, `n_candidates=6`, advisory `tp=3`, `fp=1`, `unclear=2`, 재실행 시 `shards_reused=1` 확인. `--start-shard-index 1`에서도 shard 0 report를 복원해 target 도달 여부를 판단하는 것까지 확인했습니다.
+- `src/run_many_review_units.py`를 추가했습니다.
+  - manifest에 적힌 여러 unit을 순서대로 실행합니다.
+  - `mode=sampled_batch`는 `run_corpus_review_batch.py`, `mode=full_corpus`는 `run_full_corpus_review.py`에 위임합니다.
+  - 한 unit이 target 도달, FP/unclear 상한, max shard, corpus exhausted 등 정상 stop_reason으로 끝나면 report와 제출본을 남기고 다음 unit으로 계속 진행합니다.
+  - blocked/failed unit도 aggregate report에 기록하고 기본적으로 다음 unit으로 넘어갑니다. `--stop-on-failure`가 있으면 첫 blocked/failed에서 멈춥니다.
+  - manifest 상대 경로는 repo root/current working directory 기준으로 해석합니다.
+  - `/private/tmp` smoke:
+    - 1-unit dry-run 통과
+    - ps_df004 full-corpus `max_shards=1` 실행 통과
+    - 재실행 시 underlying shard `shards_reused=1` 확인
+    - missing gold unit 뒤에 ps_df004 unit을 둔 manifest에서 첫 unit failed 기록 후 두 번째 unit ok로 계속 진행 확인
+    - `--start-at-unit`, `--only-unit` dry-run 필터 확인
+  - 향후 보강 후보: `--dry-run`에서 gold/bundle/dict 등 필수 파일 존재 여부까지 검증하는 옵션 또는 기본 검증을 추가하면 30개 항목 사전 점검에 더 유용합니다.
+- `src/finalize_many_labeled_reviews.py`를 추가했습니다.
+  - manifest에 적힌 여러 unit의 labeled review를 순서대로 `finalize_labeled_review.py`에 위임합니다.
+  - 성공적으로 export된 item-level `{unit_id}_encoder_pair_examples.jsonl`만 모아 `merge_encoder_examples.py`로 `all_encoder_*` aggregate를 재생성합니다.
+  - 한 unit이 blocked/failed여도 기본적으로 다음 unit으로 계속 진행하며, `--stop-on-failure`가 있으면 첫 blocked/failed에서 멈춥니다.
+  - 성공 export가 0개이면 merge를 호출하지 않고 `skipped_no_successful_exports`로 기록합니다.
+  - `--only-unit` 또는 `--start-at-unit`으로 일부 unit만 merge한 경우 `includes_only_this_run_units=true`를 report에 기록합니다.
+  - `/private/tmp` smoke: `py_compile` 통과, dry-run 통과, missing bundle unit failed 후 merge `skipped_no_successful_exports` 기록 확인.
 - 현재는 인코더 학습을 실행하지 않습니다. 여러 문법항목의 TP/FP export가 충분히 쌓인 뒤 전체 aggregate 기준으로 학습합니다.
 - ps_df004 `고 말` task-unit 자동화 batch_000을 사용자 검수 단계까지 진행했습니다.
   - input dict: `datasets/dict/dict_ps_df004.xlsx`
@@ -63,6 +84,18 @@
     - `r_ps_df004_v02`: `target=component_right_context`, `component_id=c2`, `context_chars=1`, `pattern=^(?:했|해|을|하|씀)$`
     - `ps_df004` gold 50 회귀: `gold_recall=1.0`, `span_exact_recall=1.0`, `fn_count=0`
     - direct smoke: `해내고야 말았다`는 kept, `간다"고 말했다`/`고 말했습니다`/`고 말하듯`는 rejected
+  - 2026-05-05 재시작 검증:
+    - `polysets.detect_ruleset_id=rs_ps_df004_d01`, `polysets.verify_ruleset_id=rs_ps_df004_v01`로 dict 연결 보정
+    - `src.export_gold` 재실행: `exported_gold/ps_df004_gold_50.jsonl`, `gold_total=50`
+    - `src.detector.export_bundle` 재실행: `configs/detector/detector_bundle_ps_df004.json`, `warnings=0`
+    - gold gate: `gold_recall=1.0`, `span_exact_recall=1.0`, `component_span_success_count=50`, `fn_count=0`
+    - `run_corpus_review_batch --batch-index 0 --overwrite`: 후보 `7`, before verify `158`, hard_failed `151`, first-pass `tp=4`, `fp=3`
+    - TP가 `min_tp_for_batch_mode=30` 미만이라 full-corpus offline search로 전환
+    - `run_full_corpus_review --target-first-pass-tp 150 --max-shards 50 --overwrite-shards`: `status=ok`, `stop_reason=target_first_pass_tp_reached`, `n_input_texts=509406`, `n_candidates=673`, advisory `tp=153`, `fp=51`, `unclear=469`
+    - learner corpus가 후반 shard에서 고갈되어 `exhausted_reason=selected_below_requested`로 기록되고, 부족분은 `news`로 backfill됨
+    - 같은 full-corpus 명령을 `--overwrite-shards` 없이 재실행해 `shards_reused=50`, 누적 카운트 동일함을 확인
+    - 2026-05-05 보강: `--max-first-pass-fp`, `--max-first-pass-unclear`를 추가하고 기본값을 각각 `500`으로 설정함
+    - 사람이 검수할 기준 파일: `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_df004/full_corpus/ps_df004_full_corpus_first_pass_merged.xlsx`
   - 사람이 열어 최종 검수할 기준 파일:
     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_df004/ps_df004_batch_000_codex_review_first_pass.xlsx`
     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_df004/ps_df004_batch_000_codex_review_first_pass.csv`

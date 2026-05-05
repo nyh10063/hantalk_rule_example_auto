@@ -2,8 +2,8 @@
   "schema_version": "hantalk_detector_bundle_v1",
   "source": {
     "dict_xlsx": "datasets/dict/dict_ps_df004.xlsx",
-    "source_sha256": "1fd2adee6cb0bd1715ac8693198c38c608702152719e555449278977a3311c15",
-    "generated_at": "2026-05-05T05:54:04.108945+00:00"
+    "source_sha256": "928fb993dcaebfd07d7b3a1036e26efc4a06bdc9c1466a51718ab08759ec3719",
+    "generated_at": "2026-05-05T06:45:33.644270+00:00"
   },
   "items_by_e_id": {
     "df004": {
