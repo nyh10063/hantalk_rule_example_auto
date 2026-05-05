@@ -388,9 +388,18 @@ def _validate_existing_shard(shard_report: dict[str, Any], *, unit_id: str, shar
         raise ValueError("Existing shard report is missing first_pass_label_counts")
     outputs = shard_report.get("outputs") or {}
     n_candidates = int((shard_report.get("search_summary") or {}).get("n_candidates") or 0)
-    required_keys = ["prepared_jsonl", "prepared_report_json", "detection_jsonl", "human_review_csv", "search_report_json"]
+    required_keys = ["prepared_jsonl", "prepared_report_json", "detection_jsonl", "search_report_json"]
     if n_candidates > 0:
-        required_keys.extend(["codex_review_csv", "codex_review_xlsx", "first_pass_csv", "first_pass_xlsx", "first_pass_report_json"])
+        required_keys.extend(
+            [
+                "human_review_csv",
+                "codex_review_csv",
+                "codex_review_xlsx",
+                "first_pass_csv",
+                "first_pass_xlsx",
+                "first_pass_report_json",
+            ]
+        )
     missing = [key for key in required_keys if not outputs.get(key) or not Path(str(outputs[key])).exists()]
     if missing:
         raise FileNotFoundError(f"Existing shard artifact is incomplete. Missing output(s): {missing}")
