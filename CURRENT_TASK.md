@@ -83,6 +83,22 @@
   - smoke 결과: `그런데`, `근데`, `가운데`, `원데이`, `팬데믹`, `텐데`는 hard fail, `가는데`, `파는데`, `추운데`, `더운데`, `좋은데`, `했는데`는 유지
   - gold 50 재검증 결과: `gold_recall=1.0`, `span_exact_recall=1.0`, `component_span_success_count=50`, `fn_count=0`
   - batch_002 재생성 후 candidates: `1199 -> 908`, first-pass label counts: `tp=902`, `fp=4`, `unclear=2`
+- ps_ce002 selected labeled review와 encoder example export를 완료했습니다.
+  - labeled input: `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_batch_002_codex_review_first_pass_labeled.csv`
+  - paired xlsx도 같은 이름으로 보존: `ps_ce002_batch_002_codex_review_first_pass_labeled.xlsx`
+  - cleanup: `daily_conversation_b002_001098-cand01`의 `human_label=tp` 행에 비어 있던 `span_status`를 `ok`로 보정함
+  - summary: `n_rows=244`, `TP=234`, `FP=10`, `processed_batches=1`, `FP/TP=0.0427`, `rule_refinement_status.reason=fp_tp_ratio_within_threshold`
+  - generated summary: `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_review_summary.json`
+  - encoder export: `n_rows_exported=244`, `positive=234`, `negative=10`, `ready_for_training=false`
+  - generated files:
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_encoder_pair_examples.jsonl`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_encoder_examples.xlsx`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_encoder_examples_summary.json`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_finalize_labeled_review_report.json`
+  - `src/finalize_labeled_review.py`를 추가해 labeled review summary와 encoder example export를 한 번에 실행하도록 함
+  - encoder 확인용 Excel의 첫 열을 `e_id`에서 `item_id`로 변경함. `ps_ce002` 같은 polyset task에서 teaching member e_id와 detect/encoder task id가 섞여 보이는 것을 방지하기 위함
+  - smoke 결과: 정상 ps_ce002 labeled CSV는 `summary_next_action=continue_batch_search`여도 export 실행, cleanup이 있는 임시 파일은 `needs_label_cleanup`으로 export 차단
+  - next expected step: user will add supplemental FP examples for `ㄴ/은/는 + 의존명사 데`; after that, rerun `export_encoder_examples.py` with both labeled inputs.
 
 아래 “누적 완료 이력”과 이후 날짜별 기록은 historical log입니다. 오래된 결정이 현재 기준과 다를 수 있으며, 보존 가치가 있는 과거 시도는 복기용으로 남깁니다.
 

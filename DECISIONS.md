@@ -312,3 +312,7 @@ Reason: dict Excel은 사람이 관리하는 SSOT이고 bundle은 자동 생성 
 ### Decision: first-pass review profile 부재는 corpus search 실패로 처리하지 않는다.
 
 Reason: 새 문법항목은 corpus search 결과를 먼저 봐야 Codex 1차 검토 profile을 설계할 수 있다. first-pass profile이 없다는 이유로 `run_corpus_review_batch.py`를 실패시키면 신규 unit 자동화가 시작 단계에서 막힌다. 따라서 `apply_first_pass_review.py`는 profile이 없을 때 `profile_status=missing`을 report에 기록하고, `run_corpus_review_batch.py`는 해당 단계를 `skipped_no_profile`로 남기되 전체 run은 계속 완료한다. 사람이 열어 작업할 기준 파일은 `*_codex_review_first_pass.xlsx/csv`이며, profile이 없는 경우 이 파일은 blank/no-profile 수동 검토 템플릿 역할을 한다.
+
+### Decision: labeled review finalize wrapper는 summary/export만 수행한다.
+
+Reason: 사람이 최종 선별/라벨한 파일이 준비된 뒤 매번 `summarize_review.py`와 `export_encoder_examples.py`를 수동 순서로 실행하면 누락과 옵션 불일치가 생길 수 있다. 따라서 `src/finalize_labeled_review.py`를 thin wrapper로 두어 labeled review summary와 encoder example export를 한 번에 수행한다. 이 wrapper는 dict, detect rule, bundle을 수정하지 않으며, cleanup 문제가 있으면 기본적으로 export를 차단한다. TP/FP 목표 미달이나 `continue_batch_search` 상태는 실패가 아니므로 현재 확보량 기준 export를 허용하고 `ready_for_training=false`와 warning으로 남긴다.

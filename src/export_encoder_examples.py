@@ -82,7 +82,7 @@ SPAN_STATUS_ALIASES = {
 }
 
 XLSX_COLUMNS = [
-    "e_id",
+    "item_id",
     "example_id",
     "context_left",
     "target_sentence",
@@ -219,18 +219,27 @@ def _validate_review_columns(path: Path, rows: list[dict[str, str]]) -> None:
 def _load_item_metadata(bundle_path: Path, item_id: str) -> dict[str, str]:
     bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
     item = (bundle.get("items_by_e_id") or {}).get(item_id)
-    if not item:
-        raise ValueError(f"{bundle_path}: item_id not found in items_by_e_id: {item_id}")
-    canonical_form = str(item.get("canonical_form") or "").strip()
-    gloss = str(item.get("gloss") or "").strip()
-    group = str(item.get("group") or "").strip()
+    runtime_unit = (bundle.get("runtime_units") or {}).get(item_id)
+    if item:
+        metadata = item
+        metadata_source = "items_by_e_id"
+    elif runtime_unit:
+        metadata = runtime_unit
+        metadata_source = "runtime_units"
+    else:
+        raise ValueError(f"{bundle_path}: item_id not found in items_by_e_id or runtime_units: {item_id}")
+
+    canonical_form = str(metadata.get("canonical_form") or "").strip()
+    gloss = str(metadata.get("gloss") or "").strip()
+    group = str(metadata.get("group") or "").strip()
     if not canonical_form:
-        raise ValueError(f"{bundle_path}: missing canonical_form for {item_id}")
+        raise ValueError(f"{bundle_path}: missing canonical_form for {item_id} in {metadata_source}")
     text_b = f"{canonical_form}\n{gloss}" if gloss else canonical_form
     return {
         "canonical_form": canonical_form,
         "gloss": gloss,
         "group": group,
+        "metadata_source": metadata_source,
         "text_b": text_b,
     }
 
@@ -541,7 +550,7 @@ def _write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
 def _xlsx_row(record: dict[str, Any]) -> dict[str, str]:
     source = str(record.get("corpus_domain") or record.get("source") or "")
     return {
-        "e_id": str(record["item_id"]),
+        "item_id": str(record["item_id"]),
         "example_id": str(record["example_id"]),
         "context_left": "",
         "target_sentence": str(record["target_sentence"]),

@@ -249,6 +249,8 @@ gold recall=1을 만족한 정규식은 일반 말뭉치에서 실제 hit 후보
 
 운영상 `*_codex_review.csv/xlsx`는 span parse와 검토 열을 정리한 base/intermediate 파일입니다. `*_codex_review_first_pass.csv/xlsx`가 생성되면 사람이 실제로 열어 2차 확인과 최종 `human_label`/`span_status` 입력을 준비할 기준 파일은 first-pass 파일입니다. 새 unit에 대한 first-pass profile이 아직 없으면 `apply_first_pass_review.py`는 자동 TP/FP 참고값을 넣지 않고 `profile_status=missing`을 report에 기록합니다. 이 상태는 corpus search 실패가 아니며, `run_corpus_review_batch.py`는 해당 단계를 `skipped_no_profile`로 남기고 전체 run은 계속 완료합니다.
 
+사람이 최종 선별/라벨한 파일이 준비되면 `src/finalize_labeled_review.py`를 사용해 `summarize_review.py`와 `export_encoder_examples.py`를 한 번에 실행합니다. 이 wrapper는 dict/rule/bundle을 수정하지 않습니다. `needs_label_cleanup` 상태에서는 기본적으로 encoder export를 차단하고, `continue_batch_search` 또는 `max_batches_reached` 상태에서는 목표 미달 warning을 남기되 현재 labeled 입력 기준 encoder examples를 생성합니다.
+
 First-pass report에서 `codex_review_reason` 값은 장기 집계와 비교를 위한 stable machine code로 유지합니다. 대신 사람이 빠르게 읽는 `examples_by_reason`과 `codex_review_reason_ko_counts`는 한국어 label을 key로 사용하고, 원래 code 기준 grouping은 `examples_by_reason_code`에 함께 보존합니다.
 
 문법항목별 기본 수집 정책:
@@ -372,7 +374,8 @@ CLI 호환성:
 | `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_human_review_labeled.xlsx` | 사람이 확정한 TP/FP/span 검수 완료본 | 사람 | `summarize_review.py`, dataset export CLI |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_batch_###_human_review_labeled.csv` | 사람이 확정한 TP/FP/span 검수 완료본의 CSV 사본 | 사람 또는 자동 변환 | `summarize_review.py`, dataset export CLI |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_review_summary.json` | labeled review 파일 누적 집계와 목표 달성 여부 | 자동화 | 사람 + 다음 batch 판단 |
-| `HanTalk_arti/example_making/{item_id}/{item_id}_encoder_examples.xlsx` | 인코더 학습 예문 사람이 확인하는 gold-like Excel 사본 | 자동화 | 사람 확인 |
+| `HanTalk_arti/example_making/{item_id}/{item_id}_finalize_labeled_review_report.json` | labeled review finalize wrapper 실행 report. summary/export 실행 여부와 cleanup 차단 여부 기록 | 자동화 | 사람 + Codex |
+| `HanTalk_arti/example_making/{item_id}/{item_id}_encoder_examples.xlsx` | 인코더 학습 예문 사람이 확인하는 gold-like Excel 사본. detect/encoder task 기준 `item_id`를 사용하며 polyset member `e_id`와 혼동하지 않음 | 자동화 | 사람 확인 |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_encoder_pair_examples.jsonl` | 인코더 pair-mode 학습용 기계친화 예문 SSOT | 자동화 | 향후 `train_encoder_pair.py` |
 | `HanTalk_arti/example_making/{item_id}/{item_id}_encoder_examples_summary.json` | 인코더 예문 export 요약, split/role 분포, 목표 달성 여부 | 자동화 | 사람 + 학습 실행 판단 |
 | `HanTalk_arti/example_making/all/all_encoder_pair_examples.jsonl` | item별 encoder pair JSONL을 병합해 자동 생성하는 전체 aggregate. SSOT가 아님 | 자동화 | 향후 전체 학습/검증 |
