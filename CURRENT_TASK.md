@@ -35,6 +35,22 @@
   - summary JSON에서는 이 상한을 `collection_policy.max_processed_batches`로 기록합니다. CLI는 호환성을 위해 `--max-batches`를 유지합니다.
   - `summarize_review.py`는 `rule_refinement_status.should_consider_rule_update`와 `reason`으로 rule update 후보 검토 필요 여부를 기록합니다. 별도 `next_action`은 추가하지 않습니다.
 - 현재는 인코더 학습을 실행하지 않습니다. 여러 문법항목의 TP/FP export가 충분히 쌓인 뒤 전체 aggregate 기준으로 학습합니다.
+- ps_df004 `고 말` task-unit 자동화 batch_000을 사용자 검수 단계까지 진행했습니다.
+  - input dict: `datasets/dict/dict_ps_df004.xlsx`
+  - input gold: `datasets/gold/gold_ps_df004.xlsx`
+  - 구조 보정: `polysets.member_e_ids`를 `df004;df005`로 통일, gold의 `ps_id`를 `ps_df004`로 통일, gold에 `member_e_ids=df004;df005` 추가
+  - bootstrap detect rule: `r_ps_df004_d01`, pattern `고(?:야)?\s*말`
+  - bundle: `configs/detector/detector_bundle_ps_df004.json`
+  - exported gold: `exported_gold/ps_df004_gold_50.jsonl`
+  - gold 50 평가: `gold_recall=1.0`, `span_exact_recall=1.0`, `component_span_success_count=50`, `fn_count=0`
+  - dict/bundle sync: `in_sync=true`
+  - corpus batch: `batch_index=0`, candidates `158`, span_source `component_spans=158`
+  - first-pass profile: `ps_df004_v1`
+  - first-pass counts: `tp=4`, `fp=154`; 주요 FP는 `고 말했다/고 말씀/고 말하는` 등 말하기 동사 계열
+  - 사람이 열어 최종 검수할 기준 파일:
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_df004/ps_df004_batch_000_codex_review_first_pass.xlsx`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_df004/ps_df004_batch_000_codex_review_first_pass.csv`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_df004/ps_df004_batch_000_codex_review_first_pass_report.json`
 - `src/run_corpus_review_batch.py`를 추가했습니다.
   - bundle export는 하지 않고, 이미 생성된 `--bundle`과 `--gold`를 gold gate로 재평가합니다.
   - `--dict`가 제공되면 gold gate 통과 후 corpus search 전에 dict/bundle sync 검사를 기본 실행합니다.
@@ -80,7 +96,14 @@
   - `천데`, `끈데`는 비표준/오타 가능성이 있어 `unclear`로 남김
 - ps_ce002 systematic FP 제거를 위해 component-scoped verify target을 확장했습니다.
   - 새 verify target: `component_text`, `component_left_context`, `left_plus_component_text`
-  - `component_right_context`는 component 오른쪽 첫 non-space 문자 1개로 대칭 정의함
+  - `component_right_context`는 component 오른쪽 context로 대칭 정의함
+  - 2026-05-05: `component_left_context`, `component_right_context`, `left_plus_component_text`에 `detect_rules.context_chars` optional rule 옵션을 추가함
+    - 기본값은 1이며, 기존 dict는 동작 변화가 없어야 함
+    - 허용 범위는 1-20
+    - N개보다 주변 non-space 문자가 부족하면 가능한 만큼만 반환하고 오류/skip하지 않음
+    - component span을 못 찾을 때만 기존처럼 verify rule을 skip함
+    - smoke: `다"고 말했다`에서 `component_left_context context_chars=2 -> 다"`, `고 말았다`에서 `component_right_context context_chars=2 -> 았다`, 문장 시작 `고 말했다`에서는 left context `""`
+    - 회귀: ps_df003, ps_ce002, ps_df004 gold 50 모두 `gold_recall=1.0`, `span_exact_recall=1.0`, `fn_count=0`
   - `dict_ps_ce002.xlsx`에 `polysets.verify_ruleset_id=rs_ps_ce002_v01` 추가
   - `r_ps_ce002_v01`: `target=component_text`, `component_id=c1`, `pattern=^(?:텐데|근데|원데|팬데)$`
   - `r_ps_ce002_v02`: `target=left_plus_component_text`, `component_id=c1`, `pattern=^(?:그런데|가운데|파운데)$`
@@ -419,6 +442,7 @@
 - 기준 문서에서 `configs/grammar_items.yaml`을 장기 SSOT처럼 보이게 하던 설명을 보조 config로 정리함
 - 기준 문서에서 `span_start/span_end` 중심 corpus hit schema를 `span_segments` 중심 detection JSONL/review CSV schema로 교체함
 - `order_policy=fx`는 고정 순서, `order_policy=fl`은 anchor 고정 + 인접 `fl`끼리만 교환하는 정책으로 기록함
+- `anchor_rank` 의미를 `0=가장 강한 anchor`, 값이 커질수록 약한 anchor, 빈칸은 anchor 후보 아님으로 확정함
 - 합성 테스트에서 인접 `fl` component끼리는 순서 교환이 허용되고, anchor가 포함된 교환은 차단됨을 확인함
 - df003은 `order_policy=fx`이므로 component order가 `c1 → c2 → c3` 하나로 유지됨을 debug 출력으로 확인함
 - `python3 -m py_compile src/detector/span_utils.py src/detector/component_locator.py src/detector/engine.py src/test_gold.py` 통과

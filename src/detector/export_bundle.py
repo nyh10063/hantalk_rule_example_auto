@@ -60,6 +60,12 @@ COMPONENT_SCOPED_TARGETS = {
     "component_text",
     "left_plus_component_text",
 }
+CONTEXT_CHAR_TARGETS = {
+    "component_right_context",
+    "component_left_context",
+    "left_plus_component_text",
+}
+MAX_CONTEXT_CHARS = 20
 VALID_TARGETS_BY_STAGE = {
     "detect": {"raw_sentence"},
     "verify": {"raw_sentence", "char_window", *COMPONENT_SCOPED_TARGETS},
@@ -442,6 +448,17 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
             warnings.append(
                 f"detect_rules:{row_no} component_id is ignored for target={target} rule_id={rule_id}"
             )
+        context_chars = _int_or_none(row.get("context_chars"), sheet="detect_rules", row_no=row_no, key="context_chars")
+        if context_chars is not None:
+            if context_chars < 1 or context_chars > MAX_CONTEXT_CHARS:
+                raise BundleExportError(
+                    f"detect_rules:{row_no} context_chars must be between 1 and {MAX_CONTEXT_CHARS} "
+                    f"for rule_id={rule_id}: {context_chars}"
+                )
+            if target not in CONTEXT_CHAR_TARGETS:
+                warnings.append(
+                    f"detect_rules:{row_no} context_chars is ignored for target={target} rule_id={rule_id}"
+                )
         pattern = _required_text(row, "pattern", sheet="detect_rules", row_no=row_no)
         try:
             re.compile(pattern)
@@ -467,6 +484,7 @@ def build_bundle(dict_xlsx: Path) -> dict[str, Any]:
             "priority": _int_or_none(row.get("priority"), sheet="detect_rules", row_no=row_no, key="priority") or 0,
             "hard_fail": hard_fail,
             "component_id": component_id,
+            "context_chars": context_chars,
             "rule_type": "surface_regex",
             "engine": "re",
         }

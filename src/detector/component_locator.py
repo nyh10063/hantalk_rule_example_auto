@@ -370,12 +370,12 @@ class ComponentLocator:
         ]
         if not ranked:
             return None
-        # Higher anchor_rank means a stronger anchor in the migrated dict.
-        anchor = max(
+        # Lower anchor_rank means a stronger anchor. 0 is the strongest anchor.
+        anchor = min(
             ranked,
             key=lambda component: (
-                int(component.get("anchor_rank") or 0),
-                -int(component.get("comp_order") or 0),
+                int(component.get("anchor_rank")),
+                int(component.get("comp_order") or 0),
                 str(component.get("comp_id")),
             ),
         )

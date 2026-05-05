@@ -351,7 +351,7 @@ class DetectorEngine:
         candidate: dict[str, Any],
         rule: dict[str, Any],
     ) -> str | None:
-        """Return the first non-space character to the right of a component span.
+        """Return up to N non-space characters to the right of a component span.
 
         If the candidate has no component span for the requested component_id,
         the verify rule is skipped to protect recall.
@@ -359,12 +359,16 @@ class DetectorEngine:
         span = cls._component_span(candidate=candidate, rule=rule)
         if span is None:
             return None
+        context_chars = cls._context_chars(rule)
         component_end = int(span[1])
+        chars: list[str] = []
         for idx in range(component_end, len(raw_text)):
             ch = raw_text[idx]
             if not ch.isspace():
-                return ch
-        return ""
+                chars.append(ch)
+                if len(chars) >= context_chars:
+                    break
+        return "".join(chars)
 
     @classmethod
     def _component_left_context(
@@ -374,16 +378,20 @@ class DetectorEngine:
         candidate: dict[str, Any],
         rule: dict[str, Any],
     ) -> str | None:
-        """Return the first non-space character to the left of a component span."""
+        """Return up to N non-space characters to the left of a component span."""
         span = cls._component_span(candidate=candidate, rule=rule)
         if span is None:
             return None
+        context_chars = cls._context_chars(rule)
         component_start = int(span[0])
+        chars_reversed: list[str] = []
         for idx in range(component_start - 1, -1, -1):
             ch = raw_text[idx]
             if not ch.isspace():
-                return ch
-        return ""
+                chars_reversed.append(ch)
+                if len(chars_reversed) >= context_chars:
+                    break
+        return "".join(reversed(chars_reversed))
 
     @classmethod
     def _component_text(
@@ -407,12 +415,20 @@ class DetectorEngine:
         candidate: dict[str, Any],
         rule: dict[str, Any],
     ) -> str | None:
-        """Return left one-character context concatenated with component text."""
+        """Return left N-character context concatenated with component text."""
         left = cls._component_left_context(raw_text=raw_text, candidate=candidate, rule=rule)
         text = cls._component_text(raw_text=raw_text, candidate=candidate, rule=rule)
         if left is None or text is None:
             return None
         return f"{left}{text}"
+
+    @staticmethod
+    def _context_chars(rule: dict[str, Any]) -> int:
+        try:
+            context_chars = int(rule.get("context_chars") or 1)
+        except (TypeError, ValueError):
+            context_chars = 1
+        return max(1, min(context_chars, 20))
 
     @staticmethod
     def _component_span(

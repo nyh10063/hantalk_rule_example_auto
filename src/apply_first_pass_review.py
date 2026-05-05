@@ -43,8 +43,13 @@ HUMAN_REVIEW_COLUMNS = [
 ]
 BUILTIN_PROFILE_BY_ITEM_ID = {
     "ps_ce002": "ps_ce002_v1",
+    "ps_df004": "ps_df004_v1",
 }
 REASON_LABEL_KO = {
+    "auxiliary_go_malda": "보조용언 고 말다 후보",
+    "speech_verb_malhada": "말하다/말씀하다 계열 발화 동사",
+    "lexical_noun_mal": "명사 말/말이야 표현",
+    "tentative_go_malda": "형태상 고 말다 후보",
     "caution_dep_noun_de_spacing": "의존명사 데 띄어쓰기/STT 혼동 주의",
     "lexicalized_discourse_marker_geureonde": "그런데 계열 접속부사",
     "lexicalized_discourse_marker_geunde": "근데 담화표지/접속부사",
@@ -170,6 +175,109 @@ def _span_context(row: dict[str, str]) -> tuple[str, str, str, str, str]:
     prev = raw_text[start - 1] if start > 0 else ""
     next_ch = raw_text[end] if end < len(raw_text) else ""
     return before, after, window, prev, next_ch
+
+
+def _regex_match_pair(row: dict[str, str]) -> tuple[int, int] | None:
+    raw_text = str(row.get("raw_text") or "")
+    match_text = str(row.get("regex_match_text") or "")
+    value = str(row.get("regex_match_span") or "").strip()
+    if value:
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list) and len(parsed) == 2:
+                start, end = int(parsed[0]), int(parsed[1])
+                if 0 <= start < end <= len(raw_text):
+                    return start, end
+        except Exception:
+            pass
+    if match_text:
+        start = raw_text.find(match_text)
+        if start >= 0:
+            return start, start + len(match_text)
+    return None
+
+
+def _regex_with_context(row: dict[str, str], *, token_window: int = 5) -> str:
+    """Return up to N whitespace-token context around regex_match_span."""
+    raw_text = str(row.get("raw_text") or "")
+    match_pair = _regex_match_pair(row)
+    if not raw_text or match_pair is None:
+        return ""
+    match_start, match_end = match_pair
+    tokens = [
+        {
+            "text": match.group(0),
+            "start": match.start(),
+            "end": match.end(),
+        }
+        for match in re.finditer(r"\S+", raw_text)
+    ]
+    if not tokens:
+        return raw_text[match_start:match_end]
+    overlapping = [
+        idx
+        for idx, token in enumerate(tokens)
+        if max(match_start, int(token["start"])) < min(match_end, int(token["end"]))
+    ]
+    if overlapping:
+        first_idx = min(overlapping)
+        last_idx = max(overlapping)
+    else:
+        first_idx = next((idx for idx, token in enumerate(tokens) if int(token["end"]) >= match_start), 0)
+        last_idx = first_idx
+    left_idx = max(0, first_idx - token_window)
+    right_idx = min(len(tokens), last_idx + token_window + 1)
+    return " ".join(str(token["text"]) for token in tokens[left_idx:right_idx])
+
+
+def _adjacent_regex_tokens(row: dict[str, str]) -> tuple[str, str]:
+    """Return left fragment/token and up to two right fragments/tokens.
+
+    If regex_match_span splits a whitespace token, use the remaining fragment as
+    the adjacent token. For example, "보고 말하는 거야?" with regex "고 말"
+    yields left="보" and right="하는 거야?".
+    """
+    raw_text = str(row.get("raw_text") or "")
+    match_pair = _regex_match_pair(row)
+    if not raw_text or match_pair is None:
+        return "", ""
+    match_start, match_end = match_pair
+    tokens = [
+        {
+            "text": match.group(0),
+            "start": match.start(),
+            "end": match.end(),
+        }
+        for match in re.finditer(r"\S+", raw_text)
+    ]
+    if not tokens:
+        return "", ""
+    left = ""
+    for token in reversed(tokens):
+        token_start = int(token["start"])
+        token_end = int(token["end"])
+        if token_start < match_start < token_end:
+            left = raw_text[token_start:match_start]
+            break
+        if token_end <= match_start:
+            left = str(token["text"])
+            break
+
+    right_parts: list[str] = []
+    for token in tokens:
+        token_start = int(token["start"])
+        token_end = int(token["end"])
+        if token_start < match_end < token_end:
+            suffix = raw_text[match_end:token_end]
+            if suffix:
+                right_parts.append(suffix)
+            continue
+        if token_start >= match_end:
+            right_parts.append(str(token["text"]))
+        if len(right_parts) >= 2:
+            break
+    right = " ".join(right_parts[:2])
+    return left, right
 
 
 def _load_cautions(item_id: str, cautions_path: Path | None, *, skip_cautions: bool) -> dict[str, Any]:
@@ -343,6 +451,32 @@ def _classify_ps_ce002(row: dict[str, str]) -> tuple[str, str, str, str]:
     return "unclear", "ok", "unclassified", "자동 규칙으로 분류하지 못함"
 
 
+def _classify_ps_df004(row: dict[str, str]) -> tuple[str, str, str, str]:
+    raw_text = str(row.get("raw_text") or "")
+    regex_match_text = str(row.get("regex_match_text") or "")
+    span_text = str(row.get("span_text") or regex_match_text)
+    before, after, window, _prev, next_ch = _span_context(row)
+    compact = re.sub(r"\s+", "", raw_text)
+
+    # "고 말했다/말씀/말하는" are frequent systematic FPs for the broad
+    # bootstrap pattern 고(?:야)?\s*말. Keep this as advisory first-pass
+    # labeling; final human_label remains the source of truth.
+    speech_after = re.match(r"(했|했다|했고|했는|하며|해|하면|하기|하긴|하는|전했|씀|을\b)", after)
+    if speech_after or re.search(r"고\s*말(?:씀|하|했|해|전했|을\s+하)", window):
+        return "fp", "not_applicable", "speech_verb_malhada", "인용/발화 동사 '말하다/말씀하다' 계열로 보임"
+
+    if re.match(r"(이야|이\s|이[가-힣])", after):
+        return "fp", "not_applicable", "lexical_noun_mal", "명사 '말' 또는 '말이야' 담화 표현으로 보임"
+
+    if re.search(r"고(?:야)?말(?:았|겠|거|다|고야)", compact) or re.match(r"(았|겠|거|다)", after):
+        return "tp", "ok", "auxiliary_go_malda", "보조용언 '고 말다'의 완료/의지 표현으로 보임"
+
+    if span_text in {"고 말", "고 ... 말"} or regex_match_text.startswith("고"):
+        return "unclear", "ok", "tentative_go_malda", "형태상 고 말다 후보이나 말하다/명사 말 가능성 확인 필요"
+
+    return "unclear", "ok", "unclassified", "자동 규칙으로 분류하지 못함"
+
+
 def _classify_no_profile(row: dict[str, str]) -> tuple[str, str, str, str]:
     return "", "", "no_first_pass_profile", "이 unit에 대한 Codex 1차 검토 profile이 아직 없음"
 
@@ -350,18 +484,32 @@ def _classify_no_profile(row: dict[str, str]) -> tuple[str, str, str, str]:
 def _classify_row(row: dict[str, str], profile_id: str) -> tuple[str, str, str, str]:
     if profile_id == "ps_ce002_v1":
         return _classify_ps_ce002(row)
+    if profile_id == "ps_df004_v1":
+        return _classify_ps_df004(row)
     if profile_id == "none":
         return _classify_no_profile(row)
     raise ValueError(f"Unsupported first-pass profile_id={profile_id!r}")
 
 
 def _build_output_columns(input_columns: list[str]) -> list[str]:
-    review_columns = HUMAN_REVIEW_COLUMNS + FIRST_PASS_COLUMNS
-    columns = [column for column in input_columns if column not in review_columns]
-    if "regex_match_text" not in columns:
-        return columns + review_columns
-    insert_at = columns.index("regex_match_text") + 1
-    return columns[:insert_at] + review_columns + columns[insert_at:]
+    review_columns = [
+        "human_label",
+        "span_status",
+        "codex_review_label",
+        "regex_match_text",
+        "a_token_left",
+        "two_tokens_right",
+        "codex_review_span_status",
+        "codex_review_reason",
+        "codex_review_note",
+    ]
+    generated_columns = set(review_columns) | {"regex_with_context", "a_token_right"}
+    columns = [column for column in input_columns if column not in generated_columns]
+    if "raw_text" in columns:
+        insert_at = columns.index("raw_text") + 1
+        columns = columns[:insert_at] + ["regex_with_context"] + columns[insert_at:]
+        return columns[: insert_at + 1] + review_columns + columns[insert_at + 1 :]
+    return ["regex_with_context"] + review_columns + columns
 
 
 def _csv_cell(value: Any) -> str:
@@ -417,7 +565,10 @@ def _write_xlsx(path: Path, rows: list[dict[str, str]], columns: list[str]) -> N
     sheet.auto_filter.ref = sheet.dimensions
     width_overrides = {
         "raw_text": 70,
+        "regex_with_context": 70,
         "regex_match_text": 18,
+        "a_token_left": 18,
+        "two_tokens_right": 24,
         "codex_review_label": 18,
         "codex_review_span_status": 22,
         "codex_review_reason": 32,
@@ -474,6 +625,10 @@ def apply_first_pass_review(
         label, span_status, reason, note, caution_id = _classify_with_cautions(out_row, cautions)
         if caution_id is None:
             label, span_status, reason, note = _classify_row(out_row, profile)
+        out_row["regex_with_context"] = _regex_with_context(out_row)
+        a_token_left, two_tokens_right = _adjacent_regex_tokens(out_row)
+        out_row["a_token_left"] = a_token_left
+        out_row["two_tokens_right"] = two_tokens_right
         out_row["codex_review_label"] = label
         out_row["codex_review_span_status"] = span_status
         out_row["codex_review_reason"] = reason
@@ -546,7 +701,11 @@ def apply_first_pass_review(
             "examples_by_reason_code": "stable_machine_code_key",
         },
         "column_policy": {
-            "human_review_columns_after": "regex_match_text",
+            "regex_with_context_after": "raw_text",
+            "regex_match_text_after": "codex_review_label",
+            "adjacent_token_columns_after": "regex_match_text",
+            "adjacent_token_columns": ["a_token_left", "two_tokens_right"],
+            "human_review_columns_after": "regex_with_context",
             "human_review_columns": HUMAN_REVIEW_COLUMNS,
             "first_pass_columns_after": "span_status",
             "first_pass_columns": FIRST_PASS_COLUMNS,

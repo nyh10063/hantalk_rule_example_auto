@@ -1,0 +1,135 @@
+{
+  "schema_version": "hantalk_detector_bundle_v1",
+  "source": {
+    "dict_xlsx": "datasets/dict/dict_ps_df004.xlsx",
+    "source_sha256": "b56ce845c8bfa62da490638ad862396c2633d6ff423dba472b180a2daf6c5042",
+    "generated_at": "2026-05-05T02:51:37.867438+00:00"
+  },
+  "items_by_e_id": {
+    "df004": {
+      "e_id": "df004",
+      "canonical_form": "고 말1",
+      "group": "c",
+      "ps_id": "ps_df004",
+      "polyset_id": "ps_df004",
+      "level": null,
+      "topic": null,
+      "disconti_allowed": false,
+      "e_comp_ids": [],
+      "detect_ruleset_id": null,
+      "verify_ruleset_id": null,
+      "gloss": "일어나지 않았으면 좋았을 어떤 일이 끝내 일어났음을 나타내며 동시에 그 일이 일어난 것에 대한 화자의 안타까움을 나타낼 때 쓴다."
+    },
+    "df005": {
+      "e_id": "df005",
+      "canonical_form": "고 말2",
+      "group": "c",
+      "ps_id": "ps_df004",
+      "polyset_id": "ps_df004",
+      "level": null,
+      "topic": null,
+      "disconti_allowed": false,
+      "e_comp_ids": [],
+      "detect_ruleset_id": null,
+      "verify_ruleset_id": null,
+      "gloss": "이루기 쉽지 않은 어떤 일을 이루고자 하는 화자의 의지를 나타낼 때 쓴다."
+    }
+  },
+  "components_by_e_id": {
+    "ps_df004": [
+      {
+        "e_id": "ps_df004",
+        "unit_id": "ps_df004",
+        "source_e_id": null,
+        "ps_id": "ps_df004",
+        "comp_surf": "고",
+        "comp_id": "c1",
+        "is_required": true,
+        "anchor_rank": 2,
+        "comp_order": 1,
+        "order_policy": "fx",
+        "min_gap_to_next": null,
+        "max_gap_to_next": null,
+        "bridge_id": null
+      },
+      {
+        "e_id": "ps_df004",
+        "unit_id": "ps_df004",
+        "source_e_id": null,
+        "ps_id": "ps_df004",
+        "comp_surf": "말",
+        "comp_id": "c2",
+        "is_required": true,
+        "anchor_rank": 1,
+        "comp_order": 2,
+        "order_policy": "fx",
+        "min_gap_to_next": null,
+        "max_gap_to_next": null,
+        "bridge_id": null
+      }
+    ]
+  },
+  "bridges_by_id": {},
+  "rules_by_ruleset_id": {
+    "rs_ps_df004_d01": [
+      {
+        "e_id": "ps_df004",
+        "unit_id": "ps_df004",
+        "source_e_id": null,
+        "ps_id": "ps_df004",
+        "ruleset_id": "rs_ps_df004_d01",
+        "rule_id": "r_ps_df004_d01",
+        "stage": "detect",
+        "target": "raw_sentence",
+        "pattern": "고(?:야)?\\s*말",
+        "priority": 10,
+        "hard_fail": false,
+        "component_id": null,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      }
+    ]
+  },
+  "polysets_by_id": {
+    "ps_df004": {
+      "ps_id": "ps_df004",
+      "polyset_id": "ps_df004",
+      "primary_e_id": "df004",
+      "member_e_ids": [
+        "df004",
+        "df005"
+      ],
+      "canonical_form": "고 말",
+      "disconti_allowed": true,
+      "ps_comp_ids": [
+        "c1",
+        "c2"
+      ],
+      "gloss_intro": "다음 의미를 포함하는 문법항목:",
+      "encoder_gloss": "다음 의미를 포함하는 문법항목: 일어나지 않았으면 좋았을 어떤 일이 끝내 일어났음을 나타내며 동시에 그 일이 일어난 것에 대한 화자의 안타까움을 나타낼 때 쓴다; 이루기 쉽지 않은 어떤 일을 이루고자 하는 화자의 의지를 나타낼 때 쓴다",
+      "note": null,
+      "detect_ruleset_id": "rs_ps_df004_d01",
+      "verify_ruleset_id": null,
+      "detect_form": "고 말"
+    }
+  },
+  "runtime_units": {
+    "ps_df004": {
+      "unit_id": "ps_df004",
+      "unit_type": "polyset",
+      "task_unit_kind": "multi_member",
+      "group": "c",
+      "member_e_ids": [
+        "df004",
+        "df005"
+      ],
+      "canonical_form": "고 말",
+      "gloss": "다음 의미를 포함하는 문법항목: 일어나지 않았으면 좋았을 어떤 일이 끝내 일어났음을 나타내며 동시에 그 일이 일어난 것에 대한 화자의 안타까움을 나타낼 때 쓴다; 이루기 쉽지 않은 어떤 일을 이루고자 하는 화자의 의지를 나타낼 때 쓴다",
+      "detect_ruleset_ids": [
+        "rs_ps_df004_d01"
+      ],
+      "verify_ruleset_ids": []
+    }
+  },
+  "warnings": []
+}

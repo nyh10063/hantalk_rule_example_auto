@@ -624,7 +624,8 @@ Component order 정책:
 - `rule_components.order_policy=fx`이면 `comp_order` 순서를 반드시 지킵니다. 기본값도 `fx`입니다.
 - `rule_components.order_policy=fl`이면 기본 `comp_order`를 우선하되, 인접한 `fl` component끼리만 1회 adjacent swap을 허용합니다.
 - `fx` component는 움직이지 않으며, `fl` component라도 anchor component는 움직이지 않습니다.
-- anchor component는 `anchor_rank`가 가장 큰 required component로 봅니다.
+- anchor component는 `anchor_rank`가 비어 있지 않은 component 중 가장 작은 값을 가진 component로 봅니다. `0`이 가장 강한 anchor이고, 값이 커질수록 약한 anchor입니다.
+- `anchor_rank` 빈칸은 anchor 후보가 아니라는 뜻입니다.
 - 모든 component 탐색은 detect regex match 주변 `component_window_chars` 안에서만 수행하고, `max_candidates_per_component`, `max_component_paths` 제한을 적용합니다.
 
 DetectorEngine output에는 아래 필드를 넣지 않습니다.
@@ -648,11 +649,20 @@ span_end
 component-scoped verify target 정의:
 
 - `component_text`: 선택된 component span 자체의 문자열입니다. 예: `근데`, `텐데`, `운데`, `런데`.
-- `component_left_context`: 선택된 component 시작점 바로 왼쪽의 첫 non-space 문자 1개입니다.
-- `component_right_context`: 선택된 component 끝 바로 오른쪽의 첫 non-space 문자 1개입니다.
-- `left_plus_component_text`: `component_left_context`와 `component_text`를 붙인 문자열입니다. 예: `가운데=가+운데`, `그런데=그+런데`.
+- `component_left_context`: 선택된 component 시작점 왼쪽의 non-space 문자 N개입니다. N은 `detect_rules.context_chars`이며 기본값은 1입니다.
+- `component_right_context`: 선택된 component 끝 오른쪽의 non-space 문자 N개입니다. N은 `detect_rules.context_chars`이며 기본값은 1입니다.
+- `left_plus_component_text`: `component_left_context(N)`와 `component_text`를 붙인 문자열입니다. 예: `가운데=가+운데`, `다"고=다"+고`.
 
-이 target들은 먼저 full `component_spans[component_id]`를 보고, 없으면 보조 정보인 `partial_component_spans[component_id]`를 봅니다. 둘 다 없으면 recall 보호를 위해 해당 verify rule을 skip합니다. `char_window`만 후보 span envelope 기준 `window_chars`를 사용하며, component-scoped left/right context는 안전성을 위해 1글자 non-space context로 고정합니다.
+이 target들은 먼저 full `component_spans[component_id]`를 보고, 없으면 보조 정보인 `partial_component_spans[component_id]`를 봅니다. 둘 다 없으면 recall 보호를 위해 해당 verify rule을 skip합니다. `char_window`는 후보 span envelope 기준 `window_chars`를 사용합니다. component-scoped context target은 `detect_rules.context_chars`를 사용하며, 값이 비어 있으면 1로 동작합니다.
+
+`context_chars` 규칙:
+
+- 적용 target: `component_left_context`, `component_right_context`, `left_plus_component_text`
+- 허용 범위: 1-20
+- N개보다 주변 non-space 문자가 적으면 가능한 만큼만 반환합니다.
+- 주변 non-space 문자가 0개이면 빈 문자열을 반환하고, rule 자체는 skip하지 않습니다.
+- `component_text`, `raw_sentence`, `char_window`에 `context_chars`가 있으면 export warning을 남기고 runtime에서는 무시합니다.
+- `component_left_context`는 왼쪽으로 역방향 스캔해 N개를 수집한 뒤 원래 문장 순서로 반환합니다.
 
 `export_bundle.py` validation 원칙:
 
