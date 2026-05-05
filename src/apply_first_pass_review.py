@@ -50,6 +50,7 @@ REASON_LABEL_KO = {
     "speech_verb_malhada": "말하다/말씀하다 계열 발화 동사",
     "lexical_noun_mal": "명사 말/말이야 표현",
     "tentative_go_malda": "형태상 고 말다 후보",
+    "caution_malda3_stop_action": "말다3 중지/그만둠 의미 주의",
     "caution_dep_noun_de_spacing": "의존명사 데 띄어쓰기/STT 혼동 주의",
     "lexicalized_discourse_marker_geureonde": "그런데 계열 접속부사",
     "lexicalized_discourse_marker_geunde": "근데 담화표지/접속부사",

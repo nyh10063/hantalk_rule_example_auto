@@ -2,8 +2,8 @@
   "schema_version": "hantalk_detector_bundle_v1",
   "source": {
     "dict_xlsx": "datasets/dict/dict_ps_df004.xlsx",
-    "source_sha256": "928fb993dcaebfd07d7b3a1036e26efc4a06bdc9c1466a51718ab08759ec3719",
-    "generated_at": "2026-05-05T06:45:33.644270+00:00"
+    "source_sha256": "f9113200a088111d5935c7ed5e872b4d1446ab7e6a1d67ce67c0d19cddf292b2",
+    "generated_at": "2026-05-05T10:35:51.022816+00:00"
   },
   "items_by_e_id": {
     "df004": {
@@ -117,7 +117,7 @@
         "rule_id": "r_ps_df004_v02",
         "stage": "verify",
         "target": "component_right_context",
-        "pattern": "^(?:했|해|을|하|씀)$",
+        "pattern": "^(?:했|해|을|하|씀|할|은|도|린|들|지|안|로|이)$",
         "priority": 20,
         "hard_fail": true,
         "component_id": "c2",

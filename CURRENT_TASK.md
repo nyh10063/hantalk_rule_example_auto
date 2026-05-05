@@ -45,6 +45,8 @@
   - cursor는 requested가 아니라 selected row 수만큼 전진합니다.
   - `selected < requested`이면 해당 domain을 exhausted로 표시하고 `exhausted_reason=selected_below_requested`를 기록합니다.
   - `news`까지 고갈되면 backfill chain을 만들지 않고 정상 종료한 뒤 현재까지 찾은 merged first-pass 결과를 제출합니다.
+  - 긴 실행 진행 상황은 `{unit_id}_full_corpus_progress.json`과 `{unit_id}_full_corpus_progress.jsonl`에 기록합니다.
+  - 종료 전 merged first-pass CSV/XLSX 존재와 파일 크기를 검증하고, `final_output_validation`에 남깁니다.
   - ps_df004 smoke: `/private/tmp`에서 `--max-shards 1` 실행 성공, `n_input_texts=10200`, `n_candidates=6`, advisory `tp=3`, `fp=1`, `unclear=2`, 재실행 시 `shards_reused=1` 확인. `--start-shard-index 1`에서도 shard 0 report를 복원해 target 도달 여부를 판단하는 것까지 확인했습니다.
 - `src/run_many_review_units.py`를 추가했습니다.
   - manifest에 적힌 여러 unit을 순서대로 실행합니다.
@@ -84,18 +86,21 @@
     - `r_ps_df004_v02`: `target=component_right_context`, `component_id=c2`, `context_chars=1`, `pattern=^(?:했|해|을|하|씀)$`
     - `ps_df004` gold 50 회귀: `gold_recall=1.0`, `span_exact_recall=1.0`, `fn_count=0`
     - direct smoke: `해내고야 말았다`는 kept, `간다"고 말했다`/`고 말했습니다`/`고 말하듯`는 rejected
+    - 2026-05-05 추가 보강: `r_ps_df004_v02` 오른쪽 hard fail 목록을 `했/해/을/하/씀/할/은/도/린/들/지/안/로/이`로 확장함
+    - 2026-05-05 first-pass caution 추가: `configs/first_pass_cautions/ps_df004.json`에 `malda3_stop_action_hago_malass` 기록. `말다3(어떤 일이나 행동을 하지 않거나 그만두다)` 의미의 `하고 말았-` 예문은 advisory FP로 우선 표시함. 예: `거기서 봉사 하다가 나는 한 일주일 하고 말았나 봐.`, `저는 그렇게만 하고 말았는데...`
+    - 보강 후 회귀: `ps_df004` gold 50 `gold_recall=1.0`, `span_exact_recall=1.0`, `fn_count=0`. Direct smoke에서 `해내고야 말았다`는 kept, `고 말할/고 말은/고 말도/고 말들/고 말안`은 `r_ps_df004_v02`로 rejected.
   - 2026-05-05 재시작 검증:
     - `polysets.detect_ruleset_id=rs_ps_df004_d01`, `polysets.verify_ruleset_id=rs_ps_df004_v01`로 dict 연결 보정
     - `src.export_gold` 재실행: `exported_gold/ps_df004_gold_50.jsonl`, `gold_total=50`
     - `src.detector.export_bundle` 재실행: `configs/detector/detector_bundle_ps_df004.json`, `warnings=0`
     - gold gate: `gold_recall=1.0`, `span_exact_recall=1.0`, `component_span_success_count=50`, `fn_count=0`
-    - `run_corpus_review_batch --batch-index 0 --overwrite`: 후보 `7`, before verify `158`, hard_failed `151`, first-pass `tp=4`, `fp=3`
+    - `run_corpus_review_batch --batch-index 0 --overwrite`: 후보 `5`, before verify `158`, hard_failed `153`, first-pass `tp=4`, `fp=1`
     - TP가 `min_tp_for_batch_mode=30` 미만이라 full-corpus offline search로 전환
-    - `run_full_corpus_review --target-first-pass-tp 150 --max-shards 50 --overwrite-shards`: `status=ok`, `stop_reason=target_first_pass_tp_reached`, `n_input_texts=509406`, `n_candidates=673`, advisory `tp=153`, `fp=51`, `unclear=469`
+    - `run_full_corpus_review --target-first-pass-tp 150 --max-first-pass-fp 500 --max-first-pass-unclear 500 --max-shards 50 --overwrite-shards`: `status=ok`, `stop_reason=max_shards_reached`, `n_input_texts=509406`, `n_candidates=473`, advisory `tp=147`, `fp=6`, `unclear=320`
     - learner corpus가 후반 shard에서 고갈되어 `exhausted_reason=selected_below_requested`로 기록되고, 부족분은 `news`로 backfill됨
-    - 같은 full-corpus 명령을 `--overwrite-shards` 없이 재실행해 `shards_reused=50`, 누적 카운트 동일함을 확인
     - 2026-05-05 보강: `--max-first-pass-fp`, `--max-first-pass-unclear`를 추가하고 기본값을 각각 `500`으로 설정함
     - 사람이 검수할 기준 파일: `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_df004/full_corpus/ps_df004_full_corpus_first_pass_merged.xlsx`
+    - 2026-05-05 보강 검증: progress JSON/JSONL 생성 확인, `final_output_validation`에서 merged CSV/XLSX 존재 및 size 기록 확인. 기존 50 shard report를 재사용해 merged file을 복구했고 최종 merged first-pass는 `473`행, advisory `tp=147`, `fp=6`, `unclear=320`.
   - 사람이 열어 최종 검수할 기준 파일:
     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_df004/ps_df004_batch_000_codex_review_first_pass.xlsx`
     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_df004/ps_df004_batch_000_codex_review_first_pass.csv`

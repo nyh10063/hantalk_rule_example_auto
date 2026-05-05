@@ -1,0 +1,31 @@
+{
+  "schema_version": "hantalk_first_pass_cautions_v1",
+  "item_id": "ps_df004",
+  "description": "Codex 1차 TP/FP 판단 전에 반드시 확인할 ps_df004 주의 유형. 최종 라벨은 human_label 기준이다.",
+  "cautions": [
+    {
+      "caution_id": "malda3_stop_action_hago_malass",
+      "label_ko": "말다3 중지/그만둠 의미의 하고 말았-",
+      "description": "말다3 '어떤 일이나 행동을 하지 않거나 그만두다' 의미로 쓰인 '하고 말았-'는 ps_df004의 보조용언 고 말다 positive가 아니라 FP로 우선 의심한다.",
+      "priority": 10,
+      "output": {
+        "codex_review_label": "fp",
+        "codex_review_span_status": "not_applicable",
+        "codex_review_reason": "caution_malda3_stop_action",
+        "codex_review_note": "말다3(어떤 일이나 행동을 하지 않거나 그만두다) 의미의 '하고 말았-' 가능성. 예: 한 일주일 하고 말았나 봐 / 그렇게만 하고 말았는데"
+      },
+      "match": {
+        "regex_match_text_regex": "고\\s*말",
+        "raw_text_regex_any": [
+          "(?:일주일|한\\s*일주일|하루|며칠|잠깐|조금|얼마\\s*안\\s*돼|하다가).{0,30}하고\\s*말았",
+          "(?:그렇게|이렇게|저렇게|그만|그냥|만)\\s*하고\\s*말았",
+          "하고\\s*말았(?:나\\s*봐|는데|고\\s*말았|다\\s*싶|어요\\s*싶)"
+        ]
+      },
+      "examples": [
+        "거기서 봉사 하다가 나는 한 일주일 하고 말았나 봐.",
+        "저는 그렇게만 하고 말았는데 선생님은 지금 이렇게 열심히 하시는"
+      ]
+    }
+  ]
+}

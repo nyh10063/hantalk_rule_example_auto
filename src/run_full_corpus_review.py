@@ -67,6 +67,12 @@ def _write_json(path: Path, obj: dict[str, Any]) -> None:
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
 
 
+def _append_jsonl(path: Path, obj: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(obj, ensure_ascii=False, allow_nan=False) + "\n")
+
+
 def _load_json(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as f:
         return json.load(f)
@@ -349,6 +355,8 @@ def _final_paths(*, artifact_root: Path, unit_id: str) -> dict[str, Path]:
         "merged_first_pass_csv": root / f"{unit_id}_full_corpus_first_pass_merged.csv",
         "merged_first_pass_xlsx": root / f"{unit_id}_full_corpus_first_pass_merged.xlsx",
         "run_report_json": root / f"{unit_id}_full_corpus_run_report.json",
+        "progress_json": root / f"{unit_id}_full_corpus_progress.json",
+        "progress_jsonl": root / f"{unit_id}_full_corpus_progress.jsonl",
     }
 
 
@@ -663,6 +671,8 @@ def _merge_first_pass_files(
     )
     _write_csv(out_csv, rows, columns)
     _write_xlsx(out_xlsx, rows, columns)
+    _ensure_output_file(out_csv, label="merged first-pass CSV")
+    _ensure_output_file(out_xlsx, label="merged first-pass XLSX")
     label_counts = Counter(str(row.get("codex_review_label") or "blank").strip() or "blank" for row in rows)
     return {
         "unit_id": unit_id,
@@ -671,6 +681,53 @@ def _merge_first_pass_files(
         "out_csv": str(out_csv),
         "out_xlsx": str(out_xlsx),
     }
+
+
+def _ensure_output_file(path: Path, *, label: str) -> None:
+    if not path.exists():
+        raise FileNotFoundError(f"{label} was not created: {path}")
+    if not path.is_file():
+        raise ValueError(f"{label} is not a file: {path}")
+    if path.stat().st_size <= 0:
+        raise ValueError(f"{label} is empty: {path}")
+
+
+def _write_progress(
+    *,
+    final: dict[str, Path],
+    unit_id: str,
+    run_id: str,
+    shard: dict[str, Any] | None,
+    cumulative: Counter[str],
+    shard_count: int,
+    shards_reused: int,
+    stop_reason: str | None,
+    event: str,
+) -> None:
+    shard_summary: dict[str, Any] | None = None
+    if shard is not None:
+        shard_summary = {
+            "shard_index": shard.get("shard_index"),
+            "batch_id": shard.get("batch_id"),
+            "status": shard.get("status"),
+            "run_step_status": shard.get("run_step_status"),
+            "search_summary": shard.get("search_summary"),
+            "first_pass_label_counts": _label_counts(shard.get("first_pass_label_counts")),
+        }
+    payload = {
+        "schema_version": "hantalk_full_corpus_review_progress_v1",
+        "updated_at": _now_utc(),
+        "event": event,
+        "unit_id": unit_id,
+        "run_id": run_id,
+        "shards_processed_so_far": shard_count,
+        "shards_reused_so_far": shards_reused,
+        "stop_reason": stop_reason,
+        "cumulative": {key: int(value) for key, value in cumulative.items()},
+        "latest_shard": shard_summary,
+    }
+    _write_json(final["progress_json"], payload)
+    _append_jsonl(final["progress_jsonl"], payload)
 
 
 def run_full_corpus_review(args: argparse.Namespace) -> dict[str, Any]:
@@ -756,6 +813,8 @@ def run_full_corpus_review(args: argparse.Namespace) -> dict[str, Any]:
             "merged_first_pass_csv": str(final["merged_first_pass_csv"]),
             "merged_first_pass_xlsx": str(final["merged_first_pass_xlsx"]),
             "run_report_json": str(final["run_report_json"]),
+            "progress_json": str(final["progress_json"]),
+            "progress_jsonl": str(final["progress_jsonl"]),
         },
         "status": "running",
         "failure_reason": None,
@@ -810,6 +869,17 @@ def run_full_corpus_review(args: argparse.Namespace) -> dict[str, Any]:
         cumulative = Counter()
         shards: list[dict[str, Any]] = []
         domain_state = _initial_domain_state(base_quota)
+        _write_progress(
+            final=final,
+            unit_id=unit_id,
+            run_id=run_id,
+            shard=None,
+            cumulative=cumulative,
+            shard_count=0,
+            shards_reused=report["shards_reused"],
+            stop_reason=report.get("stop_reason"),
+            event="start",
+        )
         if args.start_shard_index > 0:
             for prior_shard_index in range(0, args.start_shard_index):
                 prior_outputs = _shard_paths(
@@ -832,6 +902,17 @@ def run_full_corpus_review(args: argparse.Namespace) -> dict[str, Any]:
                 sampling = prior_shard.get("sampling") or {}
                 domain_state = _copy_domain_state(sampling.get("domain_state_after") or domain_state)
                 _accumulate_shard_counts(cumulative, prior_shard)
+                _write_progress(
+                    final=final,
+                    unit_id=unit_id,
+                    run_id=run_id,
+                    shard=prior_shard,
+                    cumulative=cumulative,
+                    shard_count=len(shards),
+                    shards_reused=report["shards_reused"],
+                    stop_reason=report.get("stop_reason"),
+                    event="prior_shard_reused",
+                )
 
             cap_stop_reason = _first_pass_cap_stop_reason(cumulative, args)
             if cap_stop_reason is not None:
@@ -875,6 +956,17 @@ def run_full_corpus_review(args: argparse.Namespace) -> dict[str, Any]:
             sampling = shard.get("sampling") or {}
             domain_state = _copy_domain_state(sampling.get("domain_state_after") or domain_state)
             _accumulate_shard_counts(cumulative, shard)
+            _write_progress(
+                final=final,
+                unit_id=unit_id,
+                run_id=run_id,
+                shard=shard,
+                cumulative=cumulative,
+                shard_count=len(shards),
+                shards_reused=report["shards_reused"],
+                stop_reason=report.get("stop_reason"),
+                event="shard_completed",
+            )
 
             cap_stop_reason = _first_pass_cap_stop_reason(cumulative, args)
             if cap_stop_reason is not None:
@@ -897,6 +989,17 @@ def run_full_corpus_review(args: argparse.Namespace) -> dict[str, Any]:
         if report["stop_reason"] is None:
             report["stop_reason"] = "max_shards_reached"
             report["target_reached"] = False
+        _write_progress(
+            final=final,
+            unit_id=unit_id,
+            run_id=run_id,
+            shard=shards[-1] if shards else None,
+            cumulative=cumulative,
+            shard_count=len(shards),
+            shards_reused=report["shards_reused"],
+            stop_reason=report.get("stop_reason"),
+            event="stop_condition_selected",
+        )
 
         merge_report = _merge_first_pass_files(
             unit_id=unit_id,
@@ -921,6 +1024,12 @@ def run_full_corpus_review(args: argparse.Namespace) -> dict[str, Any]:
         report["cumulative"] = {key: int(value) for key, value in cumulative.items()}
         report["shards_processed"] = len(shards)
         report["merge_summary"] = merge_report
+        report["final_output_validation"] = {
+            "merged_first_pass_csv_exists": final["merged_first_pass_csv"].exists(),
+            "merged_first_pass_csv_size": final["merged_first_pass_csv"].stat().st_size,
+            "merged_first_pass_xlsx_exists": final["merged_first_pass_xlsx"].exists(),
+            "merged_first_pass_xlsx_size": final["merged_first_pass_xlsx"].stat().st_size,
+        }
         report["final_domain_state"] = domain_state
         report["status"] = "ok"
         report["failure_reason"] = None
@@ -938,6 +1047,17 @@ def run_full_corpus_review(args: argparse.Namespace) -> dict[str, Any]:
             report["next_step_hint"] = "All corpora were exhausted before advisory TP target. Review the merged first-pass file with currently found examples."
         else:
             report["next_step_hint"] = "Review merged first-pass file and write final human_label/span_status."
+        _write_progress(
+            final=final,
+            unit_id=unit_id,
+            run_id=run_id,
+            shard=shards[-1] if shards else None,
+            cumulative=cumulative,
+            shard_count=len(shards),
+            shards_reused=report["shards_reused"],
+            stop_reason=report.get("stop_reason"),
+            event="finished",
+        )
         return report
     except Exception as exc:
         report["status"] = "failed"
