@@ -97,6 +97,7 @@ def finalize_labeled_review(
     seed: int,
     overwrite: bool,
     allow_cleanup_export: bool,
+    require_text_id: bool,
 ) -> dict[str, Any]:
     item_id = item_id.strip()
     if not item_id:
@@ -140,6 +141,7 @@ def finalize_labeled_review(
             "fp_tp_ratio_threshold": fp_tp_ratio_threshold,
             "seed": seed,
             "allow_cleanup_export": allow_cleanup_export,
+            "require_text_id": require_text_id,
         },
         "summary_next_action": None,
         "cleanup_blocked": False,
@@ -212,6 +214,7 @@ def finalize_labeled_review(
             min_neg=target_neg,
             max_batches=max_batches,
             seed=seed,
+            require_text_id=require_text_id,
         )
         report["export_ran"] = True
         report["encoder_summary"] = {
@@ -269,6 +272,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=20260502)
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument(
+        "--require-text-id",
+        action="store_true",
+        help="Fail encoder export when any exported row has blank text_id. Recommended for normal batch automation.",
+    )
+    parser.add_argument(
         "--allow-cleanup-export",
         action="store_true",
         help="Export even when summarize_review reports needs_label_cleanup. Not recommended for normal runs.",
@@ -292,6 +300,7 @@ def main(argv: list[str] | None = None) -> int:
             seed=args.seed,
             overwrite=args.overwrite,
             allow_cleanup_export=args.allow_cleanup_export,
+            require_text_id=args.require_text_id,
         )
     except Exception as exc:  # noqa: BLE001 - CLI should emit a concise fatal message.
         print(f"[ERROR] {exc}", file=sys.stderr)

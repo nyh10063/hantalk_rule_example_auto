@@ -1,10 +1,10 @@
 {
-  "item_id": "ps_ce002",
+  "item_id": "df003",
   "eval_mode": "detector_bundle",
-  "eval_id": "bundle_ps_ce002_overlap",
-  "bundle_path": "/private/tmp/detector_bundle_ps_ce002_check.json",
+  "eval_id": "bundle_ps_df003_overlap",
+  "bundle_path": "/private/tmp/detector_bundle_ps_df003_no_item_comp_check.json",
   "active_unit_ids": [
-    "ps_ce002"
+    "ps_df003"
   ],
   "bundle_match_policy": "overlap",
   "span_source": "detector_candidate_spans",
@@ -15,7 +15,7 @@
   "component_span_fallback_rate": 0.0,
   "component_span_regex_match_count": 0,
   "span_source_counts": {
-    "component_spans": 50
+    "component_spans": 52
   },
   "gold_total": 50,
   "gold_matched": 50,
@@ -27,6 +27,6 @@
   "span_overlap_recall": 1.0,
   "span_exact_count": 50,
   "span_exact_recall": 1.0,
-  "hard_failed_candidate_count": 0,
-  "created_at": "2026-05-05T01:59:59.791684+00:00"
+  "hard_failed_candidate_count": 1,
+  "created_at": "2026-05-05T02:05:53.426171+00:00"
 }

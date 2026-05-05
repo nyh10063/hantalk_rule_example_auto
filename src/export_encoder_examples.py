@@ -313,6 +313,7 @@ def _convert_review_row(
     review_file: Path,
     item_id: str,
     item_meta: dict[str, str],
+    require_text_id: bool,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     hit_id = str(row.get("hit_id") or "").strip()
     if not hit_id:
@@ -325,7 +326,7 @@ def _convert_review_row(
 
     normalized_label = _normalize_label(row.get("human_label"))
     normalized_span_status = _normalize_span_status(row.get("span_status"))
-    raw_text = str(row.get("raw_text") or "").strip()
+    raw_text = str(row.get("raw_text") or "")
 
     base_skip = {
         "input_file": str(review_file),
@@ -345,7 +346,7 @@ def _convert_review_row(
         return None, {**base_skip, "reason": "tp_span_status_not_ok"}
     if normalized_label == "fp" and normalized_span_status not in {"ok", "not_applicable", "blank"}:
         return None, {**base_skip, "reason": "fp_span_status_not_allowed"}
-    if not raw_text:
+    if not raw_text.strip():
         return None, {**base_skip, "reason": "raw_text_blank"}
 
     span_value = row.get("span_segments")
@@ -385,6 +386,9 @@ def _convert_review_row(
     source_hit_id = hit_id
     corpus_domain = str(row.get("corpus_domain") or "").strip()
     source = str(row.get("source") or "").strip()
+    text_id = str(row.get("text_id") or "").strip()
+    if require_text_id and not text_id:
+        raise ValueError(f"{review_file}:{row_index} blank text_id; rerun with --allow-missing-text-id only for legacy/manual inputs")
 
     record = {
         "schema_version": SCHEMA_VERSION,
@@ -392,6 +396,7 @@ def _convert_review_row(
         "span_marker_style": SPAN_MARKER_STYLE,
         "item_id": item_id,
         "example_id": "",
+        "instance_id": 1,
         "id_prefix": id_prefix,
         "label": label,
         "label_name": label_name,
@@ -412,8 +417,9 @@ def _convert_review_row(
         "pattern_type": pattern_type,
         "source_hit_id": source_hit_id,
         "hit_id": hit_id,
+        "candidate_index": str(row.get("candidate_index") or ""),
         "batch_id": str(row.get("batch_id") or ""),
-        "text_id": str(row.get("text_id") or ""),
+        "text_id": text_id,
         "corpus_domain": corpus_domain,
         "source": source,
         "source_file": str(row.get("source_file") or ""),
@@ -523,6 +529,89 @@ def _assign_example_ids(records: list[dict[str, Any]], item_id: str) -> None:
         record["example_id"] = f"{item_id}-{prefix}-{counters[prefix]:04d}"
 
 
+def _span_sort_key(record: dict[str, Any]) -> tuple[int, int, int, str, str]:
+    segments = record.get("span_segments") or []
+    first_start = 10**12
+    first_end = 10**12
+    if segments:
+        first_start = int(segments[0][0])
+        first_end = int(segments[0][1])
+    try:
+        candidate_index = int(str(record.get("candidate_index") or "0"))
+    except ValueError:
+        candidate_index = 0
+    return (
+        first_start,
+        first_end,
+        candidate_index,
+        str(record.get("span_key") or ""),
+        str(record.get("hit_id") or ""),
+    )
+
+
+def _assign_instance_ids(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Assign 1-based instance ids within the same sentence/text.
+
+    The search step already gives candidate_index per source sentence. Encoder
+    examples keep a simpler instance_id so that one sentence with two valid
+    grammar candidates can be inspected as instance 1 and instance 2.
+    """
+    by_sentence: defaultdict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    missing_text_id_examples: list[dict[str, str]] = []
+    for record in records:
+        text_id = str(record.get("text_id") or "")
+        if text_id:
+            text_identity = f"text_id:{text_id}"
+        else:
+            # Keep legacy/manual inputs usable without accidentally grouping the
+            # same raw_text across different files or batches.
+            text_identity = f"missing_text_id:{record.get('review_file') or ''}:{record.get('raw_text') or ''}"
+            if len(missing_text_id_examples) < 20:
+                missing_text_id_examples.append(
+                    {
+                        "hit_id": str(record.get("hit_id") or ""),
+                        "review_file": str(record.get("review_file") or ""),
+                        "raw_text": str(record.get("raw_text") or ""),
+                    }
+                )
+        by_sentence[(str(record.get("item_id") or ""), text_identity)].append(record)
+
+    multi_instance_examples: list[dict[str, Any]] = []
+    n_multi_instance_sentences = 0
+    n_examples_in_multi_instance_sentences = 0
+    for (_item_id, _text_identity), sentence_records in by_sentence.items():
+        sentence_records.sort(key=_span_sort_key)
+        if len(sentence_records) > 1:
+            n_multi_instance_sentences += 1
+            n_examples_in_multi_instance_sentences += len(sentence_records)
+            if len(multi_instance_examples) < 20:
+                multi_instance_examples.append(
+                    {
+                        "text_id": str(sentence_records[0].get("text_id") or ""),
+                        "raw_text": str(sentence_records[0].get("raw_text") or ""),
+                        "instances": [
+                            {
+                                "instance_id": idx,
+                                "hit_id": str(record.get("hit_id") or ""),
+                                "span_key": str(record.get("span_key") or ""),
+                                "span_text": str(record.get("span_text") or ""),
+                            }
+                            for idx, record in enumerate(sentence_records, start=1)
+                        ],
+                    }
+                )
+        for idx, record in enumerate(sentence_records, start=1):
+            record["instance_id"] = idx
+
+    return {
+        "n_multi_instance_sentences": n_multi_instance_sentences,
+        "n_examples_in_multi_instance_sentences": n_examples_in_multi_instance_sentences,
+        "examples": multi_instance_examples,
+        "n_examples_missing_text_id": sum(1 for record in records if not str(record.get("text_id") or "")),
+        "missing_text_id_examples": missing_text_id_examples,
+    }
+
+
 def _counter_by(records: list[dict[str, Any]], key: str) -> dict[str, int]:
     return dict(sorted(Counter(str(record.get(key) or "unknown") for record in records).items()))
 
@@ -555,7 +644,7 @@ def _xlsx_row(record: dict[str, Any]) -> dict[str, str]:
         "context_left": "",
         "target_sentence": str(record["target_sentence"]),
         "context_right": "",
-        "instance_id": "1",
+        "instance_id": str(record.get("instance_id") or "1"),
         "split": str(record["split"]),
         "span_segments": format_span_segments(record["span_segments"]),
         "pattern_type": str(record["pattern_type"]),
@@ -607,6 +696,7 @@ def export_encoder_examples(
     min_neg: int,
     max_batches: int,
     seed: int,
+    require_text_id: bool = False,
 ) -> dict[str, Any]:
     if not item_id.strip():
         raise ValueError("--item-id must not be blank")
@@ -645,6 +735,7 @@ def export_encoder_examples(
                 review_file=input_path,
                 item_id=expected_item_id,
                 item_meta=item_meta,
+                require_text_id=require_text_id,
             )
             if record is not None:
                 raw_records.append(record)
@@ -652,6 +743,7 @@ def export_encoder_examples(
                 skipped_rows.append(skipped)
 
     deduped_records, deduped_examples = _deduplicate_records(raw_records)
+    instance_summary = _assign_instance_ids(deduped_records)
     _assign_example_ids(deduped_records, expected_item_id)
     split_warnings = _assign_splits(deduped_records, item_id=expected_item_id, seed=seed)
 
@@ -668,6 +760,12 @@ def export_encoder_examples(
         warnings.append(f"positive count below min_pos={min_pos}")
     if negative_count < min_neg:
         warnings.append(f"negative count below min_neg={min_neg}")
+    missing_text_id_count = int(instance_summary.get("n_examples_missing_text_id") or 0)
+    if missing_text_id_count:
+        warnings.append(
+            f"{missing_text_id_count} exported example(s) have blank text_id; "
+            "fallback grouping used review_file+raw_text. Prefer stable text_id for multi-batch automation."
+        )
 
     _write_jsonl(out_jsonl, deduped_records)
     _write_xlsx(out_xlsx, deduped_records)
@@ -694,6 +792,14 @@ def export_encoder_examples(
         "split_counts": {key: int(split_counts.get(key, 0)) for key in SPLIT_KEYS},
         "split_counts_by_role": _split_counts_by_role(deduped_records),
         "counts_by_domain": _counter_by(deduped_records, "corpus_domain"),
+        "instance_policy": {
+            "scope": "item_id + text_id when available; legacy fallback uses item_id + review_file + raw_text",
+            "ordering": "span_start, span_end, candidate_index, span_key, hit_id",
+            "one_based": True,
+            "text_id_recommended": True,
+            "require_text_id": require_text_id,
+        },
+        "multi_instance_summary": instance_summary,
         "collection_policy": {
             "target_pos": min_pos,
             "target_neg": min_neg,
@@ -757,6 +863,16 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--target-neg", type=int, help="Alias for --min-neg. Takes precedence when provided.")
     parser.add_argument("--max-batches", type=int, default=3)
     parser.add_argument("--seed", type=int, default=20260502)
+    parser.add_argument(
+        "--require-text-id",
+        action="store_true",
+        help="Fail if any exported labeled row has blank text_id. Recommended for normal batch automation.",
+    )
+    parser.add_argument(
+        "--allow-missing-text-id",
+        action="store_true",
+        help="Compatibility no-op. Missing text_id is allowed by default but recorded as a warning.",
+    )
     return parser
 
 
@@ -784,6 +900,7 @@ def main(argv: list[str] | None = None) -> int:
             min_neg=min_neg,
             max_batches=args.max_batches,
             seed=args.seed,
+            require_text_id=args.require_text_id and not args.allow_missing_text_id,
         )
     except Exception as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)

@@ -61,8 +61,9 @@ class DetectorEngine:
     ) -> dict[str, Any]:
         """Detect grammar candidates in raw_text.
 
-        active_unit_ids controls which runtime units are executed. In Phase 1,
-        df003 item-unit detection is the supported/tested path.
+        active_unit_ids controls which runtime task units are executed. A task
+        unit may be a legacy e_id item unit, a single-member ps_id wrapper, or
+        a multi-member ps_id polyset.
         """
         if realtime:
             include_debug = False
@@ -189,7 +190,7 @@ class DetectorEngine:
             if unit.get("unit_type") == "polyset" and not (allow_polyset or allow_experimental_polyset):
                 raise ValueError(
                     f"Polyset runtime unit is disabled unless explicitly allowed: {unit_id}. "
-                    "Pass allow_polyset=True for ps_id task units."
+                    "Pass allow_polyset=True for multi-member ps_id task units."
                 )
             units.append(unit)
         return units

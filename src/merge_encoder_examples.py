@@ -64,6 +64,7 @@ REQUIRED_KEYS = {
 XLSX_COLUMNS = [
     "item_id",
     "example_id",
+    "instance_id",
     "label",
     "split",
     "example_role",
@@ -192,18 +193,25 @@ def _validate_and_normalize_row(row: dict[str, Any]) -> dict[str, Any]:
 
     item_id = str(row["item_id"]).strip()
     example_id = str(row["example_id"]).strip()
+    instance_id = str(row.get("instance_id") or "1").strip()
     split = str(row["split"]).strip()
     example_role = str(row["example_role"]).strip()
     text_a = str(row["text_a"]).strip()
     text_b = str(row["text_b"]).strip()
     raw_text = str(row["raw_text"])
     span_key = str(row["span_key"]).strip()
-    span_text = str(row["span_text"]).strip()
+    span_text = str(row["span_text"])
 
     if not item_id:
         raise ValueError(f"{source}: blank item_id")
     if not example_id:
         raise ValueError(f"{source}: blank example_id")
+    try:
+        instance_id_int = int(instance_id)
+    except ValueError as exc:
+        raise ValueError(f"{source}: instance_id must be a positive integer, got {instance_id!r}") from exc
+    if instance_id_int <= 0:
+        raise ValueError(f"{source}: instance_id must be a positive integer, got {instance_id!r}")
     if split not in ALLOWED_SPLITS:
         raise ValueError(f"{source}: invalid split {split!r}")
     if example_role not in ALLOWED_ROLES:
@@ -218,7 +226,7 @@ def _validate_and_normalize_row(row: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"{source}: blank raw_text")
     if not span_key:
         raise ValueError(f"{source}: blank span_key")
-    if not span_text:
+    if not span_text.strip():
         raise ValueError(f"{source}: blank span_text")
 
     try:
@@ -258,6 +266,7 @@ def _validate_and_normalize_row(row: dict[str, Any]) -> dict[str, Any]:
     normalized["span_marker_style"] = span_marker_style
     normalized["item_id"] = item_id
     normalized["example_id"] = example_id
+    normalized["instance_id"] = instance_id_int
     normalized["label"] = label
     normalized["split"] = split
     normalized["example_role"] = example_role
@@ -363,6 +372,7 @@ def _xlsx_row(row: dict[str, Any]) -> dict[str, str]:
     return {
         "item_id": str(row.get("item_id") or ""),
         "example_id": str(row.get("example_id") or ""),
+        "instance_id": str(row.get("instance_id") or "1"),
         "label": str(row.get("label") if row.get("label") is not None else ""),
         "split": str(row.get("split") or ""),
         "example_role": str(row.get("example_role") or ""),

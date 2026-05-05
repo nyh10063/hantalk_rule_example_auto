@@ -3,16 +3,18 @@
 ## 현재 상태
 
 - Current phase: Phase 1 pilot
-- Current item: ps_ce002 `ㄴ/은/는데` polyset task (`ce002`, `ce003`)
+- Current item: ps_id task-unit automation (`ps_df003`, `ps_ce002` 경로 정합화)
 - Current project goal: 300개 문법항목의 검색용 정규식 및 오탐 필터링 인코더용 positive/negative 예문 구축 자동화
-- Current immediate goal: ps_ce002 batch_002 human/Codex review 파일 검수 및 TP/FP/span 분석 시작
+- Current immediate goal: 모든 문법항목에서 `ps_id`를 detect_unit_id/encoder_task_id로 사용하는 코드와 문서 정리
 
 ## 현재 기준 요약
 
 - df003 `ㄴ/은 적 있/없` pilot은 DetectorEngine, bridge/component span, corpus review, encoder example export 경로 검증을 완료했습니다.
-- ps_ce002 `ㄴ/은/는데`는 2-ID 체계를 적용합니다.
-  - `e_id`: teaching item ID (`ce002`, `ce003`)
-  - `ps_id`: detect_unit_id이자 encoder_task_id (`ps_ce002`)
+- 2026-05-05 결정: 모든 문법항목은 `ps_id` task unit을 가질 수 있습니다.
+  - `e_id`: teaching item ID (`df003`, `ce002`, `ce003`)
+  - `ps_id`: detect_unit_id이자 encoder_task_id (`ps_df003`, `ps_ce002`)
+  - `ps_id`는 실제 multi-member polyset만 뜻하지 않습니다. 단일 item wrapper와 multi-member polyset을 모두 포함하는 task unit ID입니다.
+  - `polysets` 시트명은 호환상 유지하지만 기능상 task-unit metadata 시트입니다.
 - 사용자는 새 unit 자동화 시작 시 `datasets/dict/dict_ps_??.xlsx`와 `datasets/gold/gold_ps_??.xlsx` skeleton Excel을 제공할 수 있습니다.
 - JSONL gold와 detector bundle은 Excel에서 자동 생성하는 산출물입니다. bundle을 직접 수정해 Excel로 되돌리지 않습니다.
 - ps_ce002 최신 검증 상태:
@@ -66,6 +68,8 @@
     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_batch_002_codex_review_first_pass_report.json`
   - `src/apply_first_pass_review.py`를 공식 first-pass 생성 CLI로 추가했고, `run_corpus_review_batch.py`가 이 단계를 자동 실행하도록 연결함
   - first-pass 파일의 열 순서는 `regex_match_text` 바로 오른쪽에 `human_label`, `span_status`, `codex_review_label`, `codex_review_span_status`, `codex_review_reason`, `codex_review_note`가 오도록 고정함
+  - `configs/first_pass_cautions/{unit_id}.json`을 first-pass 전 reminder repository로 추가함. Codex가 이전 human review에서 배운 FP 주의 유형을 모델 기억이 아니라 코드가 읽도록 하기 위한 장치입니다.
+  - ps_ce002 caution repository: `ㄴ/은/는 + 의존명사 데`가 띄어쓰기/STT 문제로 `ㄴ/은/는데` 연결어미처럼 붙어 보이는 유형을 `caution_dep_noun_de_spacing`으로 기록함
   - 새 unit에 first-pass profile이 없으면 실패가 아니라 `profile_status=missing`, wrapper step `skipped_no_profile`로 기록하고 blank/no-profile first-pass 파일을 사람 검수용 템플릿으로 넘기도록 정리함
   - 사람이 실제로 열어 최종 검수를 준비할 기준 파일은 `*_codex_review_first_pass.xlsx/csv`입니다. `*_codex_review.xlsx/csv`는 first-pass 생성 전 base/intermediate 산출물입니다.
   - first-pass report의 `examples_by_reason` key는 한국어 label로 출력하고, 기존 영어 reason code grouping은 `examples_by_reason_code`에 보존하도록 수정함
@@ -83,6 +87,9 @@
   - smoke 결과: `그런데`, `근데`, `가운데`, `원데이`, `팬데믹`, `텐데`는 hard fail, `가는데`, `파는데`, `추운데`, `더운데`, `좋은데`, `했는데`는 유지
   - gold 50 재검증 결과: `gold_recall=1.0`, `span_exact_recall=1.0`, `component_span_success_count=50`, `fn_count=0`
   - batch_002 재생성 후 candidates: `1199 -> 908`, first-pass label counts: `tp=902`, `fp=4`, `unclear=2`
+  - `configs/first_pass_cautions/ps_ce002.json` 적용 후 first-pass 재생성 결과: `tp=896`, `fp=10`, `unclear=2`
+  - caution hit count: `dep_noun_de_spacing=6`
+  - caution examples: `닦아 드리는데 적극적으로 사용`, `하신데 데 대해`, `확대하는데 기여`, `현실화하는데 일조`, `늦어지고 있는데 대해`, `보이는데로`
 - ps_ce002 selected labeled review와 encoder example export를 완료했습니다.
   - labeled input: `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_batch_002_codex_review_first_pass_labeled.csv`
   - paired xlsx도 같은 이름으로 보존: `ps_ce002_batch_002_codex_review_first_pass_labeled.xlsx`
@@ -97,8 +104,27 @@
     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_finalize_labeled_review_report.json`
   - `src/finalize_labeled_review.py`를 추가해 labeled review summary와 encoder example export를 한 번에 실행하도록 함
   - encoder 확인용 Excel의 첫 열을 `e_id`에서 `item_id`로 변경함. `ps_ce002` 같은 polyset task에서 teaching member e_id와 detect/encoder task id가 섞여 보이는 것을 방지하기 위함
+  - `src/export_encoder_examples.py`가 같은 문장/text 안의 여러 후보를 span 순서대로 `instance_id=1,2,...`로 배정하도록 수정함
+  - ps_ce002 현재 export에는 다중 instance 문장 4개, 해당 examples 8개가 있으며 JSONL과 Excel 모두 `instance_id`를 포함함
+  - 정상 batch 자동화에서는 `text_id` 안정 부여를 권장/의무화함. `text_id`가 없는 수동/legacy 입력은 `item_id + review_file + raw_text` fallback으로 그룹핑하고 warning을 남기며, `--require-text-id`를 켜면 오류로 차단함
+  - `src/merge_encoder_examples.py`도 전체 ledger에 `instance_id`를 포함하도록 수정함. 오래된 JSONL 호환을 위해 누락 시 `1`로 간주함
   - smoke 결과: 정상 ps_ce002 labeled CSV는 `summary_next_action=continue_batch_search`여도 export 실행, cleanup이 있는 임시 파일은 `needs_label_cleanup`으로 export 차단
   - next expected step: user will add supplemental FP examples for `ㄴ/은/는 + 의존명사 데`; after that, rerun `export_encoder_examples.py` with both labeled inputs.
+- ps_ce002 supplemental negative Excel additions를 JSONL SSOT와 all aggregate에 흡수했습니다.
+  - source Excel: `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_encoder_examples.xlsx`
+  - importer: `src/import_encoder_excel_additions.py`
+  - imported Excel-only rows: `202`
+  - ps_ce002 item-level result: `n_rows=446`, `positive=234`, `negative=212`, `ready_for_training=true`
+  - regenerated:
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_encoder_pair_examples.jsonl`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_encoder_examples.xlsx`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_encoder_examples_summary.json`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/all/all_encoder_pair_examples.jsonl`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/all/all_encoder_examples.xlsx`
+    - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/all/all_encoder_examples_summary.json`
+  - all aggregate result: `n_examples=733`, `df003=287`, `ps_ce002=446`, `positive=364`, `negative=369`
+  - audit: `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_ce002/ps_ce002_manual_supplement_audit.json`
+  - caution: supplemental 202 rows 중 span_text가 `데`를 포함하지 않는 행이 `61`개 있음. 학습 전 사용자가 의도한 hard negative인지 확인하는 것이 좋습니다.
 
 아래 “누적 완료 이력”과 이후 날짜별 기록은 historical log입니다. 오래된 결정이 현재 기준과 다를 수 있으며, 보존 가치가 있는 과거 시도는 복기용으로 남깁니다.
 

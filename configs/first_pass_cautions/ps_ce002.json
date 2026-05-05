@@ -1,0 +1,36 @@
+{
+  "schema_version": "hantalk_first_pass_cautions_v1",
+  "item_id": "ps_ce002",
+  "description": "Codex 1차 TP/FP 판단 전에 반드시 확인할 ps_ce002 주의 유형. 최종 라벨은 human_label 기준이다.",
+  "cautions": [
+    {
+      "caution_id": "dep_noun_de_spacing",
+      "label_ko": "ㄴ/은/는 + 의존명사 데 띄어쓰기/STT 혼동",
+      "description": "정제된 글에서는 띄어쓰기가 필요한 의존명사 '데'가 말뭉치나 STT에서 붙어 나타나 ㄴ/은/는데 연결어미처럼 보일 수 있다.",
+      "priority": 10,
+      "output": {
+        "codex_review_label": "fp",
+        "codex_review_span_status": "not_applicable",
+        "codex_review_reason": "caution_dep_noun_de_spacing",
+        "codex_review_note": "ㄴ/은/는 + 의존명사 데 구조 의심. STT/말뭉치에서 띄어쓰기 없이 붙어 ㄴ/은/는데 연결어미처럼 보일 수 있음"
+      },
+      "match": {
+        "span_text_regex": "(?:는데|은데|신데|한데|던데|인데|건데|큰데)$",
+        "raw_text_regex_any": [
+          "(?:는데|은데|신데|한데|던데|인데|건데|큰데)\\s*(?:대해|대한|관해|관한|대하여)",
+          "(?:는데|은데|신데|한데|던데|인데|건데|큰데)\\s*데\\s*(?:대해|대한|관해|관한|대하여)",
+          "(?:하는데|되는데|드리는데|보이는데|있는데|없는데)\\s*(?:기여|일조|사용|활용|도움|필요|로)",
+          "(?:닦아\\s*드리는데|확대하는데|현실화하는데|늦어지고\\s*있는데|보이는데로)"
+        ]
+      },
+      "examples": [
+        "국민의 눈물을 닦아 드리는데 적극적으로 사용",
+        "정부의 지원을 확대하는데 기여",
+        "비전을 현실화하는데 일조",
+        "출범이 늦어지고 있는데 대해",
+        "맛은 좀 있어 보이는데로",
+        "경험을 하신데 데 대해"
+      ]
+    }
+  ]
+}

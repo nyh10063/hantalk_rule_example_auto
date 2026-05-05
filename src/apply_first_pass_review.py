@@ -45,6 +45,7 @@ BUILTIN_PROFILE_BY_ITEM_ID = {
     "ps_ce002": "ps_ce002_v1",
 }
 REASON_LABEL_KO = {
+    "caution_dep_noun_de_spacing": "의존명사 데 띄어쓰기/STT 혼동 주의",
     "lexicalized_discourse_marker_geureonde": "그런데 계열 접속부사",
     "lexicalized_discourse_marker_geunde": "근데 담화표지/접속부사",
     "place_noun_gunde": "군데 장소/수량 명사",
@@ -59,6 +60,10 @@ REASON_LABEL_KO = {
     "unclassified": "미분류 후보",
     "no_first_pass_profile": "1차 검토 profile 없음",
 }
+
+
+def _default_cautions_path(item_id: str) -> Path:
+    return Path(__file__).resolve().parents[1] / "configs" / "first_pass_cautions" / f"{item_id}.json"
 
 
 def _now_utc() -> str:
@@ -165,6 +170,125 @@ def _span_context(row: dict[str, str]) -> tuple[str, str, str, str, str]:
     prev = raw_text[start - 1] if start > 0 else ""
     next_ch = raw_text[end] if end < len(raw_text) else ""
     return before, after, window, prev, next_ch
+
+
+def _load_cautions(item_id: str, cautions_path: Path | None, *, skip_cautions: bool) -> dict[str, Any]:
+    if skip_cautions:
+        return {
+            "status": "skipped_by_flag",
+            "source": None,
+            "cautions": [],
+        }
+    path = cautions_path or _default_cautions_path(item_id)
+    if not path.exists():
+        return {
+            "status": "missing",
+            "source": str(path),
+            "cautions": [],
+        }
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: root must be an object")
+    file_item_id = str(data.get("item_id") or "").strip()
+    if file_item_id and file_item_id != item_id:
+        raise ValueError(f"{path}: item_id={file_item_id!r} does not match --item-id={item_id!r}")
+    cautions = data.get("cautions") or []
+    if not isinstance(cautions, list):
+        raise ValueError(f"{path}: cautions must be a list")
+    normalized: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for idx, caution in enumerate(cautions, start=1):
+        if not isinstance(caution, dict):
+            raise ValueError(f"{path}: caution #{idx} must be an object")
+        caution_id = str(caution.get("caution_id") or "").strip()
+        if not caution_id:
+            raise ValueError(f"{path}: caution #{idx} missing caution_id")
+        if caution_id in seen_ids:
+            raise ValueError(f"{path}: duplicate caution_id={caution_id!r}")
+        seen_ids.add(caution_id)
+        match = caution.get("match") or {}
+        output = caution.get("output") or {}
+        if not isinstance(match, dict):
+            raise ValueError(f"{path}: caution_id={caution_id} match must be an object")
+        if not isinstance(output, dict):
+            raise ValueError(f"{path}: caution_id={caution_id} output must be an object")
+        normalized.append({**caution, "caution_id": caution_id})
+    normalized.sort(key=lambda item: (int(item.get("priority") or 100), str(item.get("caution_id") or "")))
+    return {
+        "status": "available",
+        "source": str(path),
+        "cautions": normalized,
+    }
+
+
+def _regex_search(pattern: Any, text: str, *, field_name: str, caution_id: str) -> bool:
+    if pattern is None:
+        return True
+    try:
+        return re.search(str(pattern), text) is not None
+    except re.error as exc:
+        raise ValueError(f"Invalid caution regex for {caution_id}.{field_name}: {exc}") from exc
+
+
+def _regex_any(patterns: Any, text: str, *, field_name: str, caution_id: str) -> bool:
+    if patterns is None:
+        return True
+    if not isinstance(patterns, list):
+        raise ValueError(f"{caution_id}.{field_name} must be a list")
+    if not patterns:
+        return True
+    return any(_regex_search(pattern, text, field_name=field_name, caution_id=caution_id) for pattern in patterns)
+
+
+def _matches_caution(row: dict[str, str], caution: dict[str, Any]) -> bool:
+    caution_id = str(caution.get("caution_id") or "")
+    match = caution.get("match") or {}
+    raw_text = str(row.get("raw_text") or "")
+    compact_raw_text = re.sub(r"\s+", "", raw_text)
+    span_text = str(row.get("span_text") or row.get("regex_match_text") or "")
+    regex_match_text = str(row.get("regex_match_text") or "")
+    before, after, window, prev, next_ch = _span_context(row)
+    haystacks = {
+        "raw_text": raw_text,
+        "compact_raw_text": compact_raw_text,
+        "span_text": span_text,
+        "regex_match_text": regex_match_text,
+        "window": window,
+        "before": before,
+        "after": after,
+        "prev": prev,
+        "next": next_ch,
+    }
+    for field_name, text in haystacks.items():
+        if not _regex_search(match.get(f"{field_name}_regex"), text, field_name=f"{field_name}_regex", caution_id=caution_id):
+            return False
+        if not _regex_any(
+            match.get(f"{field_name}_regex_any"),
+            text,
+            field_name=f"{field_name}_regex_any",
+            caution_id=caution_id,
+        ):
+            return False
+    return True
+
+
+def _classify_with_cautions(row: dict[str, str], cautions: list[dict[str, Any]]) -> tuple[str, str, str, str, str | None]:
+    for caution in cautions:
+        if not _matches_caution(row, caution):
+            continue
+        output = caution.get("output") or {}
+        caution_id = str(caution.get("caution_id") or "")
+        label = str(output.get("codex_review_label") or "unclear").strip()
+        span_status = str(output.get("codex_review_span_status") or "ok").strip()
+        reason = str(output.get("codex_review_reason") or f"caution_{caution_id}").strip()
+        note = str(output.get("codex_review_note") or caution.get("description") or "").strip()
+        label_ko = str(caution.get("label_ko") or caution_id).strip()
+        if note:
+            note = f"주의 유형: {label_ko}. {note}"
+        else:
+            note = f"주의 유형: {label_ko}"
+        return label, span_status, reason, note, caution_id
+    return "", "", "", "", None
 
 
 def _classify_ps_ce002(row: dict[str, str]) -> tuple[str, str, str, str]:
@@ -315,6 +439,8 @@ def apply_first_pass_review(
     out_xlsx: Path,
     report_json: Path,
     profile_id: str | None = None,
+    cautions_path: Path | None = None,
+    skip_cautions: bool = False,
 ) -> dict[str, Any]:
     item_id = item_id.strip()
     if not item_id:
@@ -327,7 +453,9 @@ def apply_first_pass_review(
         profile_source = "builtin"
     else:
         profile_source = "none"
-    advisory_labels_applied = profile_status == "available"
+    caution_config = _load_cautions(item_id, cautions_path, skip_cautions=skip_cautions)
+    cautions = caution_config["cautions"]
+    advisory_labels_applied = profile_status == "available" or bool(cautions)
     input_columns, rows = read_review_file(input_path)
     _validate_rows(input_path, rows)
     output_columns = _build_output_columns(input_columns)
@@ -336,12 +464,16 @@ def apply_first_pass_review(
     span_status_counts: Counter[str] = Counter()
     reason_counts: Counter[str] = Counter()
     reason_ko_counts: Counter[str] = Counter()
+    caution_counts: Counter[str] = Counter()
     examples_by_reason_code: dict[str, list[dict[str, str]]] = defaultdict(list)
     examples_by_reason_ko: dict[str, list[dict[str, str]]] = defaultdict(list)
+    examples_by_caution: dict[str, list[dict[str, str]]] = defaultdict(list)
 
     for row in rows:
         out_row = dict(row)
-        label, span_status, reason, note = _classify_row(out_row, profile)
+        label, span_status, reason, note, caution_id = _classify_with_cautions(out_row, cautions)
+        if caution_id is None:
+            label, span_status, reason, note = _classify_row(out_row, profile)
         out_row["codex_review_label"] = label
         out_row["codex_review_span_status"] = span_status
         out_row["codex_review_reason"] = reason
@@ -356,6 +488,8 @@ def apply_first_pass_review(
         reason_counts[reason] += 1
         reason_ko = _reason_label_ko(reason)
         reason_ko_counts[reason_ko] += 1
+        if caution_id is not None:
+            caution_counts[caution_id] += 1
         example = {
             "hit_id": out_row.get("hit_id", ""),
             "span_text": out_row.get("span_text", ""),
@@ -364,10 +498,14 @@ def apply_first_pass_review(
             "codex_review_reason_code": reason,
             "codex_review_reason_ko": reason_ko,
         }
+        if caution_id is not None:
+            example["caution_id"] = caution_id
         if len(examples_by_reason_code[reason]) < 5:
             examples_by_reason_code[reason].append(example)
         if len(examples_by_reason_ko[reason_ko]) < 5:
             examples_by_reason_ko[reason_ko].append(example)
+        if caution_id is not None and len(examples_by_caution[caution_id]) < 10:
+            examples_by_caution[caution_id].append(example)
 
     _write_csv(out_csv, output_rows, output_columns)
     _write_xlsx(out_xlsx, output_rows, output_columns)
@@ -390,6 +528,18 @@ def apply_first_pass_review(
         "codex_review_reason_ko_counts": dict(reason_ko_counts.most_common()),
         "examples_by_reason": dict(examples_by_reason_ko),
         "examples_by_reason_code": dict(examples_by_reason_code),
+        "cautions": {
+            "status": caution_config["status"],
+            "source": caution_config["source"],
+            "n_cautions": len(cautions),
+            "hit_counts": dict(caution_counts.most_common()),
+            "examples_by_caution": dict(examples_by_caution),
+            "policy": {
+                "applied_before_profile": True,
+                "advisory_only": True,
+                "human_label_is_final": True,
+            },
+        },
         "reason_label_policy": {
             "codex_review_reason": "stable_machine_code",
             "examples_by_reason": "korean_human_readable_key",
@@ -420,6 +570,16 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--out-xlsx", required=True, type=Path)
     parser.add_argument("--report-json", required=True, type=Path)
     parser.add_argument("--profile-id", help="First-pass profile id. Defaults to ps_ce002_v1 for ps_ce002, otherwise none.")
+    parser.add_argument(
+        "--cautions",
+        type=Path,
+        help="Optional first-pass caution repository JSON. Defaults to configs/first_pass_cautions/{item_id}.json if present.",
+    )
+    parser.add_argument(
+        "--skip-cautions",
+        action="store_true",
+        help="Disable first-pass caution repository lookup for this run.",
+    )
     return parser
 
 
@@ -433,6 +593,8 @@ def main(argv: list[str] | None = None) -> int:
             out_xlsx=args.out_xlsx,
             report_json=args.report_json,
             profile_id=args.profile_id,
+            cautions_path=args.cautions,
+            skip_cautions=args.skip_cautions,
         )
     except Exception as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
@@ -445,6 +607,7 @@ def main(argv: list[str] | None = None) -> int:
                 "profile_status": report["profile_status"],
                 "n_rows": report["n_rows"],
                 "codex_review_label_counts": report["codex_review_label_counts"],
+                "cautions": report["cautions"],
                 "out_csv": report["out_csv"],
                 "out_xlsx": report["out_xlsx"],
                 "report_json": report["report_json"],
