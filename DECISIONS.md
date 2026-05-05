@@ -277,9 +277,17 @@ Reason: Codex가 먼저 후보를 검토하더라도 최종 학습 데이터의 
 
 Reason: HanTalk의 목표는 응답속도가 빠른 범위에서 성능을 올리는 것이다. pair input에서 `[SPAN]...[/SPAN]` marker나 핵심 span이 max length 때문에 잘리면 모델 성능이 흔들릴 수 있으므로 split별 truncation 통계를 저장한다. 또한 모델 비교의 기준이 성능뿐 아니라 응답속도이므로 `avg_inference_example_sec`를 기록하되, 초기 측정은 tokenization, collator, DataLoader overhead를 포함한 end-to-end eval latency임을 report에 명시한다.
 
-### Decision: 문법항목별 TP/FP 수집은 `target_pos=100`, `target_neg=100`, `max_processed_batches=3`을 기본 정책으로 한다.
+### Decision: 문법항목별 TP/FP 수집은 `target_pos=100`, `target_neg=100`, `max_processed_batches=3`, `min_tp_for_batch_mode=30`을 기본 정책으로 한다.
 
-Reason: `다면`처럼 FP가 거의 없는 문법항목에서 무한히 batch를 추가하면 작업량이 커지고, 오히려 해당 항목에 오탐 필터 인코더가 필요한지 판단이 늦어진다. 따라서 기본 목표는 TP 100개와 FP 100개로 두되, 최대 3개 processed labeled batch까지만 수집한다. 여기서 processed batch는 검색한 batch가 아니라 사람이 labeled review를 완료해 summary에 반영한 batch이다. 3 processed batch 후에도 한쪽이 부족하면 무한 검색하지 않고 현재 확보량으로 encoder 필요성, 추가 말뭉치 전략, 또는 학습 방식 조정을 재판단한다. CLI는 호환성을 위해 `--max-batches`를 유지하지만 summary 기준 key는 `max_processed_batches`로 둔다.
+Reason: `다면`처럼 FP가 거의 없는 문법항목에서 무한히 batch를 추가하면 작업량이 커지고, 오히려 해당 항목에 오탐 필터 인코더가 필요한지 판단이 늦어진다. 반대로 `고 말`처럼 sampled batch에서 TP가 30개 미만으로 매우 적게 나오면 같은 sampling 비율을 반복해도 positive 예문 확보 효율이 낮다. 따라서 기본 목표는 TP 100개와 FP 100개로 두되, 최대 3개 processed labeled batch까지만 수집한다. 여기서 processed batch는 검색한 batch가 아니라 사람이 labeled review를 완료해 summary에 반영한 batch이다. processed labeled review 기준 TP가 `min_tp_for_batch_mode=30` 미만이면 sampled batch 반복 대신 전체 말뭉치 offline search로 전환한다. CLI는 호환성을 위해 `--max-batches`를 유지하지만 summary 기준 key는 `max_processed_batches`로 둔다.
+
+### Decision: full-corpus search는 10,200행 shard 단위로 실행하고 advisory TP 150개에서 멈춘다.
+
+Reason: ps_df004 `고 말`처럼 sampled batch에서 TP가 4개 수준인 항목은 일반 batch 반복만으로 positive 예문 100개 이상을 확보하기 어렵다. 그러나 전체 말뭉치를 한 번에 메모리에 올리면 속도와 안정성 위험이 커진다. 따라서 full-corpus search는 manifest의 top-level sampling 비율을 사용한 10,200행 shard를 순차 생성해 실행한다. 각 shard는 `search_corpus`, `prepare_codex_review`, `apply_first_pass_review`를 거치고, advisory first-pass TP가 150개 이상이면 중단한다. 중간 실패 후 재시작할 때는 기존 shard report를 읽어 누적하고 해당 shard를 재실행하지 않는다. Advisory TP는 Codex 1차 판단일 뿐이며, 최종 라벨은 human review가 확정한다.
+
+### Decision: full-corpus shard 고갈분은 news로만 backfill하고, news도 고갈되면 정상 종료한다.
+
+Reason: 10,200행 shard를 순차 실행할 때 일부 domain이 먼저 고갈될 수 있다. 이 경우 전체 shard 크기를 최대한 유지하기 위해 부족분은 `news` domain에 더한다. 다만 backfill chain을 만들면 말뭉치 비율 추적과 cursor 관리가 복잡해지므로, `news`가 고갈되면 다른 domain으로 재분배하지 않고 현재까지 찾은 first-pass 결과를 제출한다. Cursor는 요청 수가 아니라 실제 선택된 row 수만큼 전진한다. `selected < requested`는 현재 운영에서는 exhausted로 처리하되, report에 `exhausted_reason=selected_below_requested`를 남겨 나중에 실제 고갈과 필터링 부족을 구분해 복기할 수 있게 한다.
 
 ### Decision: encoder example export 단계에서는 TP/FP downsampling을 적용하지 않는다.
 

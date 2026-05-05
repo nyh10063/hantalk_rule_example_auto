@@ -259,15 +259,26 @@ def prepare_corpus(
     out_path: Path,
     report_path: Path,
     seed_override: int | None = None,
+    batch_id_override: str | None = None,
+    use_top_level_sampling: bool = False,
 ) -> dict[str, Any]:
     manifest = _load_json(manifest_path)
     seed = int(seed_override if seed_override is not None else manifest.get("seed", 0))
     delimiter = str(manifest.get("delimiter", ";"))
     encoding = str(manifest.get("encoding", "utf-8-sig"))
     batch_id_prefix = str(manifest.get("batch_id_prefix", "example_making"))
-    batch_id = f"{batch_id_prefix}_batch_{batch_index:03d}"
+    batch_id = batch_id_override or f"{batch_id_prefix}_batch_{batch_index:03d}"
     corpora = manifest.get("corpora") or {}
-    schedule = _select_sampling_schedule(manifest, batch_index)
+    schedule = (
+        {
+            "schedule_id": "top_level_sampling_override",
+            "start_batch_index": 0,
+            "sampling": manifest.get("sampling") or {},
+            "rank_start_offsets": {},
+        }
+        if use_top_level_sampling
+        else _select_sampling_schedule(manifest, batch_index)
+    )
     sampling = schedule.get("sampling") or {}
     schedule_id = str(schedule.get("schedule_id", "default"))
     schedule_start_batch_index = int(schedule.get("start_batch_index", 0))
@@ -312,6 +323,8 @@ def prepare_corpus(
         "output_path": str(out_path),
         "batch_id": batch_id,
         "batch_index": batch_index,
+        "batch_id_override": batch_id_override,
+        "use_top_level_sampling": use_top_level_sampling,
         "sampling_schedule_id": schedule_id,
         "sampling_schedule_start_batch_index": schedule_start_batch_index,
         "sampling_rank_start_offsets": rank_start_offsets,
@@ -342,6 +355,117 @@ def prepare_corpus(
     return report
 
 
+def prepare_corpus_from_domain_plan(
+    *,
+    manifest_path: Path,
+    corpus_root: Path,
+    batch_id: str,
+    shard_index: int,
+    domain_plan: dict[str, dict[str, int]],
+    out_path: Path,
+    report_path: Path,
+    seed_override: int | None = None,
+) -> dict[str, Any]:
+    """Prepare a corpus shard from explicit per-domain rank cursors.
+
+    Unlike prepare_corpus(), this helper does not derive rank_start from a
+    global batch_index. It is used by full-corpus offline search so each domain
+    can advance independently and exhausted domains can be backfilled.
+    """
+    manifest = _load_json(manifest_path)
+    seed = int(seed_override if seed_override is not None else manifest.get("seed", 0))
+    delimiter = str(manifest.get("delimiter", ";"))
+    encoding = str(manifest.get("encoding", "utf-8-sig"))
+    corpora = manifest.get("corpora") or {}
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    all_records: list[dict[str, Any]] = []
+    domain_reports: dict[str, Any] = {}
+    sampling_requested_by_domain: dict[str, int] = {}
+    sampling_rank_start_by_domain: dict[str, int] = {}
+
+    for domain, plan in domain_plan.items():
+        requested = int(plan.get("requested") or 0)
+        rank_start = int(plan.get("rank_start") or 0)
+        sampling_requested_by_domain[domain] = requested
+        sampling_rank_start_by_domain[domain] = rank_start
+        if requested <= 0:
+            domain_reports[domain] = {
+                "domain": domain,
+                "source_file": None,
+                "requested": requested,
+                "batch_index": shard_index,
+                "rank_start": rank_start,
+                "rank_end_exclusive": rank_start,
+                "keep_count": rank_start,
+                "n_rows_seen": 0,
+                "n_rows_valid": 0,
+                "n_rows_selected": 0,
+                "n_rows_skipped_empty": 0,
+                "n_rows_skipped_parse_error": 0,
+                "warning": None,
+                "skipped_zero_requested": True,
+            }
+            continue
+        if domain not in corpora:
+            raise KeyError(f"domain_plan domain is missing from corpora: {domain}")
+        file_name = str(corpora[domain]["file"])
+        file_path = _resolve_file(corpus_root, file_name)
+        selected, domain_report = _sample_domain(
+            domain=domain,
+            file_path=file_path,
+            requested=requested,
+            rank_start=rank_start,
+            batch_id=batch_id,
+            batch_index=shard_index,
+            seed=seed,
+            delimiter=delimiter,
+            encoding=encoding,
+        )
+        all_records.extend(selected)
+        domain_reports[domain] = domain_report
+
+    with out_path.open("w", encoding="utf-8") as f:
+        for record in all_records:
+            f.write(json.dumps(record, ensure_ascii=False, allow_nan=False) + "\n")
+
+    report = {
+        "schema_version": "hantalk_prepared_example_corpus_report_v1",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "manifest_path": str(manifest_path),
+        "corpus_root": str(corpus_root),
+        "output_path": str(out_path),
+        "batch_id": batch_id,
+        "batch_index": shard_index,
+        "domain_plan_mode": True,
+        "seed": seed,
+        "hash_method": HASH_METHOD,
+        "delimiter": delimiter,
+        "encoding": encoding,
+        "sampling_requested_by_domain": sampling_requested_by_domain,
+        "sampling_rank_start_by_domain": sampling_rank_start_by_domain,
+        "n_rows_selected_total": len(all_records),
+        "n_rows_selected_by_domain": {
+            domain: int(domain_report["n_rows_selected"]) for domain, domain_report in domain_reports.items()
+        },
+        "n_rows_seen_by_domain": {
+            domain: int(domain_report["n_rows_seen"]) for domain, domain_report in domain_reports.items()
+        },
+        "n_rows_valid_by_domain": {
+            domain: int(domain_report["n_rows_valid"]) for domain, domain_report in domain_reports.items()
+        },
+        "n_rows_skipped_empty_by_domain": {
+            domain: int(domain_report["n_rows_skipped_empty"]) for domain, domain_report in domain_reports.items()
+        },
+        "n_rows_skipped_parse_error_by_domain": {
+            domain: int(domain_report["n_rows_skipped_parse_error"]) for domain, domain_report in domain_reports.items()
+        },
+        "domain_reports": domain_reports,
+    }
+    _write_json(report_path, report)
+    return report
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", required=True, type=Path)
@@ -350,6 +474,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--report", required=True, type=Path)
     parser.add_argument("--seed", type=int, default=None, help="Override manifest seed.")
+    parser.add_argument("--batch-id-override", default=None, help="Override the generated batch_id written into records.")
+    parser.add_argument(
+        "--use-top-level-sampling",
+        action="store_true",
+        help="Ignore sampling_schedules and use manifest.sampling directly. Used by full-corpus shard automation.",
+    )
     return parser.parse_args(argv)
 
 
@@ -362,6 +492,8 @@ def main(argv: list[str] | None = None) -> int:
         out_path=args.out,
         report_path=args.report,
         seed_override=args.seed,
+        batch_id_override=args.batch_id_override,
+        use_top_level_sampling=args.use_top_level_sampling,
     )
     print(
         json.dumps(

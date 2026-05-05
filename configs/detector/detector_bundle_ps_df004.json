@@ -2,8 +2,8 @@
   "schema_version": "hantalk_detector_bundle_v1",
   "source": {
     "dict_xlsx": "datasets/dict/dict_ps_df004.xlsx",
-    "source_sha256": "b56ce845c8bfa62da490638ad862396c2633d6ff423dba472b180a2daf6c5042",
-    "generated_at": "2026-05-05T02:51:37.867438+00:00"
+    "source_sha256": "1fd2adee6cb0bd1715ac8693198c38c608702152719e555449278977a3311c15",
+    "generated_at": "2026-05-05T05:54:04.108945+00:00"
   },
   "items_by_e_id": {
     "df004": {
@@ -85,6 +85,43 @@
         "priority": 10,
         "hard_fail": false,
         "component_id": null,
+        "context_chars": null,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      }
+    ],
+    "rs_ps_df004_v01": [
+      {
+        "e_id": "ps_df004",
+        "unit_id": "ps_df004",
+        "source_e_id": null,
+        "ps_id": "ps_df004",
+        "ruleset_id": "rs_ps_df004_v01",
+        "rule_id": "r_ps_df004_v01",
+        "stage": "verify",
+        "target": "component_left_context",
+        "pattern": "^(?:다\"|”라)$",
+        "priority": 10,
+        "hard_fail": true,
+        "component_id": "c1",
+        "context_chars": 2,
+        "rule_type": "surface_regex",
+        "engine": "re"
+      },
+      {
+        "e_id": "ps_df004",
+        "unit_id": "ps_df004",
+        "source_e_id": null,
+        "ps_id": "ps_df004",
+        "ruleset_id": "rs_ps_df004_v01",
+        "rule_id": "r_ps_df004_v02",
+        "stage": "verify",
+        "target": "component_right_context",
+        "pattern": "^(?:했|해|을|하|씀)$",
+        "priority": 20,
+        "hard_fail": true,
+        "component_id": "c2",
+        "context_chars": 1,
         "rule_type": "surface_regex",
         "engine": "re"
       }
@@ -109,7 +146,7 @@
       "encoder_gloss": "다음 의미를 포함하는 문법항목: 일어나지 않았으면 좋았을 어떤 일이 끝내 일어났음을 나타내며 동시에 그 일이 일어난 것에 대한 화자의 안타까움을 나타낼 때 쓴다; 이루기 쉽지 않은 어떤 일을 이루고자 하는 화자의 의지를 나타낼 때 쓴다",
       "note": null,
       "detect_ruleset_id": "rs_ps_df004_d01",
-      "verify_ruleset_id": null,
+      "verify_ruleset_id": "rs_ps_df004_v01",
       "detect_form": "고 말"
     }
   },
@@ -128,7 +165,9 @@
       "detect_ruleset_ids": [
         "rs_ps_df004_d01"
       ],
-      "verify_ruleset_ids": []
+      "verify_ruleset_ids": [
+        "rs_ps_df004_v01"
+      ]
     }
   },
   "warnings": []

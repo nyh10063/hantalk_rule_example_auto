@@ -268,6 +268,7 @@ def summarize_reviews(
     target_pos: int,
     target_neg: int,
     max_batches: int,
+    min_tp_for_batch_mode: int,
     fp_tp_ratio_threshold: float,
 ) -> dict[str, Any]:
     if not item_id.strip():
@@ -280,6 +281,8 @@ def summarize_reviews(
         raise ValueError("--target-neg must be >= 0")
     if max_batches <= 0:
         raise ValueError("--max-batches must be > 0")
+    if min_tp_for_batch_mode < 0:
+        raise ValueError("--min-tp-for-batch-mode must be >= 0")
     if fp_tp_ratio_threshold <= 0:
         raise ValueError("--fp-tp-ratio-threshold must be > 0")
     expected_item_id = item_id.strip()
@@ -397,6 +400,11 @@ def summarize_reviews(
     positive_target_reached = positive_count >= target_pos
     negative_target_reached = negative_count >= target_neg
     all_targets_reached = positive_target_reached and negative_target_reached
+    low_tp_for_batch_mode = (
+        min_tp_for_batch_mode > 0
+        and positive_count < min_tp_for_batch_mode
+        and not positive_target_reached
+    )
     sorted_batch_ids = sorted(processed_batch_ids)
     processed_batches = len(processed_batch_ids)
     max_batches_reached = processed_batches >= max_batches
@@ -420,6 +428,9 @@ def summarize_reviews(
     elif all_targets_reached:
         stop_reason = "target_reached"
         next_action = "ready_for_encoder_export"
+    elif low_tp_for_batch_mode:
+        stop_reason = "low_tp_for_batch_mode"
+        next_action = "switch_to_full_corpus_search"
     elif max_batches_reached:
         stop_reason = "max_batches_reached"
         next_action = "max_batches_reached"
@@ -431,6 +442,7 @@ def summarize_reviews(
         "target_pos": target_pos,
         "target_neg": target_neg,
         "max_processed_batches": max_batches,
+        "min_tp_for_batch_mode": min_tp_for_batch_mode,
         "cli_flag": "--max-batches",
     }
     collection_status = {
@@ -441,6 +453,8 @@ def summarize_reviews(
         "positive_target_reached": positive_target_reached,
         "negative_target_reached": negative_target_reached,
         "all_targets_reached": all_targets_reached,
+        "low_tp_for_batch_mode": low_tp_for_batch_mode,
+        "full_corpus_search_recommended": low_tp_for_batch_mode,
         "max_batches_reached": max_batches_reached,
         "stop_reason": stop_reason,
         "next_action": next_action,
@@ -522,6 +536,15 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help="Maximum number of processed labeled review batches to summarize before stopping collection/refinement.",
     )
     parser.add_argument(
+        "--min-tp-for-batch-mode",
+        type=int,
+        default=30,
+        help=(
+            "If TP count is below this value after labeled review and the positive target is not reached, "
+            "recommend switching from sampled batch search to full-corpus offline search."
+        ),
+    )
+    parser.add_argument(
         "--fp-tp-ratio-threshold",
         type=float,
         default=2.0,
@@ -546,6 +569,7 @@ def main(argv: list[str] | None = None) -> int:
             target_pos=args.target_pos,
             target_neg=args.target_neg,
             max_batches=args.max_batches,
+            min_tp_for_batch_mode=args.min_tp_for_batch_mode,
             fp_tp_ratio_threshold=args.fp_tp_ratio_threshold,
         )
     except Exception as exc:

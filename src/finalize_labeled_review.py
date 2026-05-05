@@ -74,9 +74,19 @@ def _guard_outputs(paths: dict[str, Path], *, overwrite: bool) -> None:
             path.unlink()
 
 
-def _next_step_hint(*, export_ran: bool, cleanup_blocked: bool, encoder_summary: dict[str, Any] | None) -> str:
+def _next_step_hint(
+    *,
+    export_ran: bool,
+    cleanup_blocked: bool,
+    next_action: str,
+    encoder_summary: dict[str, Any] | None,
+) -> str:
     if cleanup_blocked:
         return "Fix human_label/span_status cleanup issues, then rerun finalize_labeled_review."
+    if next_action == "switch_to_full_corpus_search":
+        return (
+            "TP count is below the batch-mode floor. Run full-corpus offline search, then review/label the additional candidates."
+        )
     if not export_ran:
         return "Export did not run. Inspect finalize report and rerun when ready."
     if encoder_summary and not encoder_summary.get("ready_for_training"):
@@ -93,6 +103,7 @@ def finalize_labeled_review(
     target_pos: int,
     target_neg: int,
     max_batches: int,
+    min_tp_for_batch_mode: int,
     fp_tp_ratio_threshold: float,
     seed: int,
     overwrite: bool,
@@ -113,6 +124,8 @@ def finalize_labeled_review(
         raise ValueError("--target-neg must be >= 0")
     if max_batches <= 0:
         raise ValueError("--max-batches must be > 0")
+    if min_tp_for_batch_mode < 0:
+        raise ValueError("--min-tp-for-batch-mode must be >= 0")
     if fp_tp_ratio_threshold <= 0:
         raise ValueError("--fp-tp-ratio-threshold must be > 0")
 
@@ -138,6 +151,7 @@ def finalize_labeled_review(
             "target_pos": target_pos,
             "target_neg": target_neg,
             "max_processed_batches": max_batches,
+            "min_tp_for_batch_mode": min_tp_for_batch_mode,
             "fp_tp_ratio_threshold": fp_tp_ratio_threshold,
             "seed": seed,
             "allow_cleanup_export": allow_cleanup_export,
@@ -161,6 +175,7 @@ def finalize_labeled_review(
             target_pos=target_pos,
             target_neg=target_neg,
             max_batches=max_batches,
+            min_tp_for_batch_mode=min_tp_for_batch_mode,
             fp_tp_ratio_threshold=fp_tp_ratio_threshold,
         )
         next_action = str(review_summary.get("next_action") or "")
@@ -189,6 +204,18 @@ def finalize_labeled_review(
             report["next_step_hint"] = _next_step_hint(
                 export_ran=False,
                 cleanup_blocked=True,
+                next_action=next_action,
+                encoder_summary=None,
+            )
+            return report
+
+        if next_action == "switch_to_full_corpus_search":
+            report["status"] = "blocked"
+            report["failure_reason"] = "switch_to_full_corpus_search"
+            report["next_step_hint"] = _next_step_hint(
+                export_ran=False,
+                cleanup_blocked=False,
+                next_action=next_action,
                 encoder_summary=None,
             )
             return report
@@ -199,6 +226,7 @@ def finalize_labeled_review(
             report["next_step_hint"] = _next_step_hint(
                 export_ran=False,
                 cleanup_blocked=False,
+                next_action=next_action,
                 encoder_summary=None,
             )
             return report
@@ -233,6 +261,7 @@ def finalize_labeled_review(
         report["next_step_hint"] = _next_step_hint(
             export_ran=True,
             cleanup_blocked=False,
+            next_action=next_action,
             encoder_summary=encoder_summary,
         )
         return report
@@ -242,6 +271,7 @@ def finalize_labeled_review(
             report["next_step_hint"] = _next_step_hint(
                 export_ran=bool(report.get("export_ran")),
                 cleanup_blocked=bool(report.get("cleanup_blocked")),
+                next_action=str(report.get("summary_next_action") or ""),
                 encoder_summary=report.get("encoder_summary"),
             )
         _write_json(paths["finalize_report"], report)
@@ -268,6 +298,15 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--target-pos", type=int, default=100)
     parser.add_argument("--target-neg", type=int, default=100)
     parser.add_argument("--max-batches", type=int, default=3)
+    parser.add_argument(
+        "--min-tp-for-batch-mode",
+        type=int,
+        default=30,
+        help=(
+            "If TP count is below this value after labeled review and the positive target is not reached, "
+            "block encoder export and recommend full-corpus offline search."
+        ),
+    )
     parser.add_argument("--fp-tp-ratio-threshold", type=float, default=2.0)
     parser.add_argument("--seed", type=int, default=20260502)
     parser.add_argument("--overwrite", action="store_true")
@@ -296,6 +335,7 @@ def main(argv: list[str] | None = None) -> int:
             target_pos=args.target_pos,
             target_neg=args.target_neg,
             max_batches=args.max_batches,
+            min_tp_for_batch_mode=args.min_tp_for_batch_mode,
             fp_tp_ratio_threshold=args.fp_tp_ratio_threshold,
             seed=args.seed,
             overwrite=args.overwrite,

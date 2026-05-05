@@ -33,7 +33,18 @@
   - `processed_batches >= 3`이면 batch 추가와 규칙 다듬기를 중단하고 현재 확보량으로 판단합니다.
   - `processed_batches`는 사람이 labeled review를 완료해 summary에 반영한 batch 수입니다.
   - summary JSON에서는 이 상한을 `collection_policy.max_processed_batches`로 기록합니다. CLI는 호환성을 위해 `--max-batches`를 유지합니다.
+  - processed labeled review 기준 TP가 `min_tp_for_batch_mode=30` 미만이면 `next_action=switch_to_full_corpus_search`로 기록하고, sampled batch 반복 대신 전체 말뭉치 offline search로 전환합니다.
   - `summarize_review.py`는 `rule_refinement_status.should_consider_rule_update`와 `reason`으로 rule update 후보 검토 필요 여부를 기록합니다. 별도 `next_action`은 추가하지 않습니다.
+- `src/run_full_corpus_review.py`를 추가했습니다.
+  - 전체 말뭉치를 한 번에 읽지 않고 10,200행 shard 단위로 `prepare_corpus -> search_corpus -> prepare_codex_review -> apply_first_pass_review`를 실행합니다.
+  - top-level sampling 비율을 강제 사용합니다: 일상대화 5,000 / 뉴스 700 / 비출판물 2,000 / 학습자 2,500.
+  - 기본 중단 기준은 advisory first-pass TP 150개 또는 `max_shards=50`입니다.
+  - 기존 shard report가 있으면 schema와 `domain_state_after`를 검증한 뒤 `skipped_existing_report`로 누적해 재시작 비용을 줄입니다.
+  - domain 고갈 시 이후 shard에서 해당 domain을 건너뛰고 부족분을 `news`에 backfill합니다.
+  - cursor는 requested가 아니라 selected row 수만큼 전진합니다.
+  - `selected < requested`이면 해당 domain을 exhausted로 표시하고 `exhausted_reason=selected_below_requested`를 기록합니다.
+  - `news`까지 고갈되면 backfill chain을 만들지 않고 정상 종료한 뒤 현재까지 찾은 merged first-pass 결과를 제출합니다.
+  - ps_df004 smoke: `/private/tmp`에서 `--max-shards 1` 실행 성공, `n_input_texts=10200`, `n_candidates=6`, advisory `tp=3`, `fp=1`, `unclear=2`, 재실행 시 `shards_reused=1` 확인. `--start-shard-index 1`에서도 shard 0 report를 복원해 target 도달 여부를 판단하는 것까지 확인했습니다.
 - 현재는 인코더 학습을 실행하지 않습니다. 여러 문법항목의 TP/FP export가 충분히 쌓인 뒤 전체 aggregate 기준으로 학습합니다.
 - ps_df004 `고 말` task-unit 자동화 batch_000을 사용자 검수 단계까지 진행했습니다.
   - input dict: `datasets/dict/dict_ps_df004.xlsx`
@@ -47,6 +58,11 @@
   - corpus batch: `batch_index=0`, candidates `158`, span_source `component_spans=158`
   - first-pass profile: `ps_df004_v1`
   - first-pass counts: `tp=4`, `fp=154`; 주요 FP는 `고 말했다/고 말씀/고 말하는` 등 말하기 동사 계열
+  - 2026-05-05 verify hard_fail 추가:
+    - `r_ps_df004_v01`: `target=component_left_context`, `component_id=c1`, `context_chars=2`, `pattern=^(?:다"|”라)$`
+    - `r_ps_df004_v02`: `target=component_right_context`, `component_id=c2`, `context_chars=1`, `pattern=^(?:했|해|을|하|씀)$`
+    - `ps_df004` gold 50 회귀: `gold_recall=1.0`, `span_exact_recall=1.0`, `fn_count=0`
+    - direct smoke: `해내고야 말았다`는 kept, `간다"고 말했다`/`고 말했습니다`/`고 말하듯`는 rejected
   - 사람이 열어 최종 검수할 기준 파일:
     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_df004/ps_df004_batch_000_codex_review_first_pass.xlsx`
     - `/Users/yonghyunnam/coding/HanTalk_group/HanTalk_arti/example_making/ps_df004/ps_df004_batch_000_codex_review_first_pass.csv`
